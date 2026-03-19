@@ -1,0 +1,122 @@
+import { Router } from 'express';
+import { getDb } from '../db/database.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
+
+const router = Router();
+
+const WITH_DETAILS = `
+  SELECT r.*, u.name as user_name, u.email as user_email,
+         v.name as vehicle_name, v.license_plate
+  FROM reservations r
+  JOIN users u ON r.user_id = u.id
+  JOIN vehicles v ON r.vehicle_id = v.id
+`;
+
+router.get('/', authenticate, (req, res) => {
+  const db = getDb();
+  const reservations = req.user.role === 'admin'
+    ? db.prepare(`${WITH_DETAILS} ORDER BY r.date DESC, r.time_from DESC`).all()
+    : db.prepare(`${WITH_DETAILS} WHERE r.user_id = ? ORDER BY r.date DESC, r.time_from DESC`).all(req.user.id);
+  res.json(reservations);
+});
+
+router.get('/availability', authenticate, (req, res) => {
+  const { vehicle_id, date, time_from, time_to, exclude_id } = req.query;
+  if (!vehicle_id || !date || !time_from || !time_to) {
+    return res.status(400).json({ error: 'Parameter fehlen' });
+  }
+
+  const db = getDb();
+  let query = `
+    SELECT id FROM reservations
+    WHERE vehicle_id = ? AND date = ? AND status != 'cancelled'
+    AND NOT (time_to <= ? OR time_from >= ?)
+  `;
+  const params = [vehicle_id, date, time_from, time_to];
+
+  if (exclude_id) {
+    query += ' AND id != ?';
+    params.push(exclude_id);
+  }
+
+  const conflict = db.prepare(query).get(...params);
+  res.json({ available: !conflict });
+});
+
+router.post('/', authenticate, (req, res) => {
+  const { vehicle_id, date, time_from, time_to, reason } = req.body;
+  if (!vehicle_id || !date || !time_from || !time_to || !reason) {
+    return res.status(400).json({ error: 'Alle Felder sind erforderlich' });
+  }
+  if (time_from >= time_to) {
+    return res.status(400).json({ error: 'Endzeit muss nach Startzeit liegen' });
+  }
+
+  const db = getDb();
+
+  const vehicle = db.prepare('SELECT id FROM vehicles WHERE id = ? AND active = 1').get(vehicle_id);
+  if (!vehicle) return res.status(404).json({ error: 'Fahrzeug nicht gefunden' });
+
+  const conflict = db.prepare(`
+    SELECT id FROM reservations
+    WHERE vehicle_id = ? AND date = ? AND status != 'cancelled'
+    AND NOT (time_to <= ? OR time_from >= ?)
+  `).get(vehicle_id, date, time_from, time_to);
+
+  if (conflict) {
+    return res.status(409).json({ error: 'Fahrzeug ist in diesem Zeitraum bereits reserviert' });
+  }
+
+  const result = db.prepare(
+    'INSERT INTO reservations (user_id, vehicle_id, date, time_from, time_to, reason) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(req.user.id, vehicle_id, date, time_from, time_to, reason.trim());
+
+  const reservation = db.prepare(`${WITH_DETAILS} WHERE r.id = ?`).get(result.lastInsertRowid);
+  res.status(201).json(reservation);
+});
+
+router.patch('/:id/complete', authenticate, (req, res) => {
+  const { km_driven, destination } = req.body;
+  if (!km_driven || !destination) {
+    return res.status(400).json({ error: 'Kilometer und Zielort sind erforderlich' });
+  }
+  if (km_driven < 1) {
+    return res.status(400).json({ error: 'Kilometer muss größer als 0 sein' });
+  }
+
+  const db = getDb();
+  const reservation = db.prepare('SELECT * FROM reservations WHERE id = ?').get(req.params.id);
+  if (!reservation) return res.status(404).json({ error: 'Reservierung nicht gefunden' });
+
+  if (reservation.user_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  if (reservation.status !== 'reserved') {
+    return res.status(400).json({ error: 'Reservierung kann nicht abgeschlossen werden' });
+  }
+
+  db.prepare(
+    "UPDATE reservations SET km_driven=?, destination=?, status='completed' WHERE id=?"
+  ).run(Number(km_driven), destination.trim(), req.params.id);
+
+  const updated = db.prepare(`${WITH_DETAILS} WHERE r.id = ?`).get(req.params.id);
+  res.json(updated);
+});
+
+router.patch('/:id/cancel', authenticate, (req, res) => {
+  const db = getDb();
+  const reservation = db.prepare('SELECT * FROM reservations WHERE id = ?').get(req.params.id);
+  if (!reservation) return res.status(404).json({ error: 'Reservierung nicht gefunden' });
+
+  if (reservation.user_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  if (reservation.status !== 'reserved') {
+    return res.status(400).json({ error: 'Nur aktive Reservierungen können storniert werden' });
+  }
+
+  db.prepare("UPDATE reservations SET status = 'cancelled' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+export default router;
