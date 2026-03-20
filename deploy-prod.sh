@@ -10,7 +10,8 @@ echo "=== Deploy FaBu Production ==="
 cd /home/deploy/FaBu
 
 echo "1) Git Pull from main"
-git pull origin main
+git config pull.rebase true
+git pull --rebase origin main
 
 echo "2) Backend installieren"
 cd backend
