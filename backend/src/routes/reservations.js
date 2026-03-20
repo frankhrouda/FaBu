@@ -119,4 +119,10 @@ router.patch('/:id/cancel', authenticate, (req, res) => {
   res.json({ success: true });
 });
 
+router.get('/vehicle/:vehicle_id', authenticate, (req, res) => {
+  const db = getDb();
+  const reservations = db.prepare(`${WITH_DETAILS} WHERE r.vehicle_id = ? AND r.status != 'cancelled' ORDER BY r.date ASC, r.time_from ASC`).all(req.params.vehicle_id);
+  res.json(reservations);
+});
+
 export default router;

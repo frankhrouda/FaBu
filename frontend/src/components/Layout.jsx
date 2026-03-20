@@ -1,10 +1,11 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import BottomNav from './BottomNav';
-import { Car } from 'lucide-react';
+import { Car, LogOut } from 'lucide-react';
 
 export default function Layout() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="flex flex-col min-h-screen max-w-lg mx-auto">
@@ -15,11 +16,20 @@ export default function Layout() {
             <Car className="w-5 h-5" />
             <span className="font-bold text-lg tracking-tight">FaBu</span>
           </div>
-          <div className="text-sm text-indigo-200 truncate max-w-[160px]">
-            {user?.name}
-            {user?.role === 'admin' && (
-              <span className="ml-1 text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">Admin</span>
-            )}
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-indigo-200 truncate max-w-[140px]">
+              {user?.name}
+              {user?.role === 'admin' && (
+                <span className="ml-1 text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">Admin</span>
+              )}
+            </div>
+            <button
+              onClick={() => { logout(); navigate('/login'); }}
+              className="p-1 rounded-full bg-indigo-500 hover:bg-indigo-400 transition-colors"
+              title="Abmelden"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>

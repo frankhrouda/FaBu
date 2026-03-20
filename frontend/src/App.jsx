@@ -8,6 +8,7 @@ import Vehicles from './pages/Vehicles';
 import Reservations from './pages/Reservations';
 import NewReservation from './pages/NewReservation';
 import Admin from './pages/Admin';
+import Calendar from './pages/Calendar';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="vehicles" element={<Vehicles />} />
             <Route path="reservations" element={<Reservations />} />
             <Route path="reservations/new" element={<NewReservation />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
           </Route>
         </Routes>

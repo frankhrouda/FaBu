@@ -11,7 +11,7 @@ getDb(); // Initialize DB on startup
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173'] }));
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173', 'https://fabu-online.de', 'https://www.fabu-online.de'] }));
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);

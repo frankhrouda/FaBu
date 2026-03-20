@@ -6,6 +6,7 @@ const navItems = [
   { to: '/', label: 'Übersicht', icon: LayoutDashboard, end: true },
   { to: '/vehicles', label: 'Fahrzeuge', icon: Car },
   { to: '/reservations', label: 'Fahrten', icon: CalendarDays },
+  { to: '/calendar', label: 'Kalender', icon: CalendarDays },
 ];
 
 export default function BottomNav() {
