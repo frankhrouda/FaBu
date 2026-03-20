@@ -15,11 +15,26 @@ export default function NewReservation() {
     reason: '',
   });
   const [availability, setAvailability] = useState(null);
+  const [dayReservations, setDayReservations] = useState([]);
+  const [dayLoading, setDayLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => { api.get('/vehicles').then(setVehicles); }, []);
+
+  useEffect(() => {
+    if (!form.vehicle_id || !form.date) {
+      setDayReservations([]);
+      return;
+    }
+
+    setDayLoading(true);
+    api.get(`/reservations/vehicle/${form.vehicle_id}`)
+      .then((items) => setDayReservations(items.filter((r) => r.date === form.date)))
+      .catch(() => setDayReservations([]))
+      .finally(() => setDayLoading(false));
+  }, [form.vehicle_id, form.date]);
 
   // Check availability when all fields are filled
   useEffect(() => {
@@ -68,6 +83,23 @@ export default function NewReservation() {
   };
 
   const today = new Date().toISOString().slice(0, 10);
+
+  const hours = Array.from({ length: 11 }, (_, i) => 8 + i);
+  const timeToDecimal = (t) => {
+    const [h, m] = t.split(':').map(Number);
+    return h + m / 60;
+  };
+
+  const reservationForHour = (hour) => {
+    return dayReservations.find((r) => {
+      if (r.status === 'cancelled') return false;
+      const start = timeToDecimal(r.time_from);
+      const end = timeToDecimal(r.time_to);
+      return start < hour + 1 && end > hour;
+    });
+  };
+
+  const hourInUse = (hour) => Boolean(reservationForHour(hour));
 
   return (
     <div className="p-4 space-y-5">
@@ -180,6 +212,37 @@ export default function NewReservation() {
               )}
               {checking ? 'Verfügbarkeit wird geprüft…' : availability ? 'Fahrzeug verfügbar' : 'Fahrzeug bereits belegt!'}
             </div>
+          )}
+
+          {/* Tageskalender (8-19 Uhr) für gewähltes Fahrzeug+Datum */}
+          {form.vehicle_id && form.date && (
+            <section className="mt-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">Tageskalender (8-19 Uhr)</h3>
+                {dayLoading ? <span className="text-xs text-gray-500">Lade...</span> : <span className="text-xs text-gray-500">{dayReservations.length} Buchung(en)</span>}
+              </div>
+              <div className="grid grid-cols-12 gap-1 text-center text-xs">
+                <div className="col-span-1 font-medium">Zeit</div>
+                <div className="col-span-11 font-medium">Status</div>
+                {hours.flatMap((hour) => {
+                  const res = reservationForHour(hour);
+                  const title = res
+                    ? `Gebucht ${res.time_from}-${res.time_to} • ${res.user_name || 'Nutzer'} • ${res.reason || 'Kein Zweck'}`
+                    : 'Frei';
+
+                  return [
+                    <div key={`label-${hour}`} className="col-span-1 py-1 bg-gray-50 border border-gray-100">{hour}:00</div>,
+                    <div
+                      key={`status-${hour}`}
+                      title={title}
+                      className={`col-span-11 py-1 border border-gray-100 ${hourInUse(hour) ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}
+                    >
+                      {hourInUse(hour) ? 'Gebucht' : 'Frei'}
+                    </div>,
+                  ];
+                })}
+              </div>
+            </section>
           )}
         </section>
 
