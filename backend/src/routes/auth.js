@@ -41,10 +41,10 @@ router.post('/login', async (req, res) => {
 
   const db = getDb();
   const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!row) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+  if (!row) return res.status(401).json({ error: 'E-Mail-Adresse oder Passwort ist nicht korrekt.' });
 
   const valid = await bcrypt.compare(password, row.password);
-  if (!valid) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+  if (!valid) return res.status(401).json({ error: 'E-Mail-Adresse oder Passwort ist nicht korrekt.' });
 
   const user = { id: row.id, name: row.name, email: row.email, role: row.role };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });

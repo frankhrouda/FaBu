@@ -45,8 +45,9 @@ export default function Login() {
           <h2 className="text-xl font-bold text-gray-900 mb-6">Anmelden</h2>
 
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm px-3 py-2 rounded-lg mb-4 border border-red-100">
-              {error}
+            <div className="flex items-start gap-2 bg-red-50 text-red-700 text-sm px-3 py-2.5 rounded-lg mb-4 border border-red-200">
+              <span className="mt-0.5 shrink-0">⚠️</span>
+              <span>{error}</span>
             </div>
           )}
 
