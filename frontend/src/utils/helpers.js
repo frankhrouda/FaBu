@@ -9,6 +9,21 @@ export function formatDate(dateStr) {
   });
 }
 
+export const RESERVATION_HOUR_START = 8;
+export const RESERVATION_HOUR_END = 22;
+
+export function buildReservationHours(start = RESERVATION_HOUR_START, end = RESERVATION_HOUR_END) {
+  return Array.from({ length: end - start }, (_, i) => start + i);
+}
+
+export function formatHourValue(hour) {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+export function formatReservationHourRange(start = RESERVATION_HOUR_START, end = RESERVATION_HOUR_END) {
+  return `${formatHourValue(start)} - ${formatHourValue(end)}`;
+}
+
 export function formatKm(km) {
   if (km == null) return '—';
   return `${Number(km).toLocaleString('de-DE')} km`;

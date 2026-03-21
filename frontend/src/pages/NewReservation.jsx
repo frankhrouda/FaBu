@@ -2,7 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Car, Calendar, Clock, FileText, CheckCircle2 } from 'lucide-react';
 import { api } from '../api/client';
-import { vehicleTypeIcon } from '../utils/helpers';
+import {
+  buildReservationHours,
+  formatHourValue,
+  formatReservationHourRange,
+  RESERVATION_HOUR_END,
+  RESERVATION_HOUR_START,
+  vehicleTypeIcon,
+} from '../utils/helpers';
 
 export default function NewReservation() {
   const navigate = useNavigate();
@@ -84,7 +91,7 @@ export default function NewReservation() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const hours = Array.from({ length: 11 }, (_, i) => 8 + i);
+  const hours = buildReservationHours();
   const timeToDecimal = (t) => {
     const [h, m] = t.split(':').map(Number);
     return h + m / 60;
@@ -177,6 +184,8 @@ export default function NewReservation() {
                   type="time"
                   value={form.time_from}
                   onChange={set('time_from')}
+                  min={formatHourValue(RESERVATION_HOUR_START)}
+                  max={formatHourValue(RESERVATION_HOUR_END)}
                   required
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
@@ -190,6 +199,8 @@ export default function NewReservation() {
                   type="time"
                   value={form.time_to}
                   onChange={set('time_to')}
+                  min={formatHourValue(RESERVATION_HOUR_START)}
+                  max={formatHourValue(RESERVATION_HOUR_END)}
                   required
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
@@ -214,11 +225,11 @@ export default function NewReservation() {
             </div>
           )}
 
-          {/* Tageskalender (8-19 Uhr) für gewähltes Fahrzeug+Datum */}
+          {/* Tageskalender für gewähltes Fahrzeug+Datum */}
           {form.vehicle_id && form.date && (
             <section className="mt-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Tageskalender (8-19 Uhr)</h3>
+                <h3 className="text-sm font-semibold text-gray-700">Tageskalender ({formatReservationHourRange()})</h3>
                 {dayLoading ? <span className="text-xs text-gray-500">Lade...</span> : <span className="text-xs text-gray-500">{dayReservations.length} Buchung(en)</span>}
               </div>
               <div className="grid grid-cols-12 gap-1 text-center text-xs">
@@ -231,7 +242,7 @@ export default function NewReservation() {
                     : 'Frei';
 
                   return [
-                    <div key={`label-${hour}`} className="col-span-1 py-1 bg-gray-50 border border-gray-100">{hour}:00</div>,
+                    <div key={`label-${hour}`} className="col-span-1 py-1 bg-gray-50 border border-gray-100">{formatHourValue(hour)}</div>,
                     <div
                       key={`status-${hour}`}
                       title={title}

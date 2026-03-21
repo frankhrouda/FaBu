@@ -2,7 +2,14 @@ import { useState, useEffect, Fragment } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Car, CalendarDays, Clock, CheckCircle2, XCircle } from 'lucide-react';
-import { formatDate, statusBadge, statusLabel } from '../utils/helpers';
+import {
+  buildReservationHours,
+  formatDate,
+  formatHourValue,
+  formatReservationHourRange,
+  statusBadge,
+  statusLabel,
+} from '../utils/helpers';
 import { Link } from 'react-router-dom';
 
 function getNextDays(days = 14) {
@@ -72,7 +79,7 @@ export default function Calendar() {
     return items.sort((a, b) => a.time_from.localeCompare(b.time_from));
   };
 
-  const hours = Array.from({ length: 11 }, (_, i) => 8 + i);
+  const hours = buildReservationHours();
 
   const parseDecimalTime = (time) => {
     const [h, m] = time.split(':').map(Number);
@@ -178,7 +185,7 @@ export default function Calendar() {
                   ? 'Alle Fahrzeuge'
                   : vehicles.find((v) => v.id === Number(selectedVehicleId))?.name || 'Kein Fahrzeug ausgewählt'}
               </h2>
-              <span className="text-xs text-gray-500">Stunden: 8:00 - 19:00</span>
+              <span className="text-xs text-gray-500">Stunden: {formatReservationHourRange()}</span>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -199,7 +206,7 @@ export default function Calendar() {
 
                   {hours.map((hour) => (
                     <Fragment key={`row-${hour}`}>
-                      <div className="px-2 py-1 text-xs text-gray-500 bg-gray-50 border-t border-gray-200">{hour}:00</div>
+                      <div className="px-2 py-1 text-xs text-gray-500 bg-gray-50 border-t border-gray-200">{formatHourValue(hour)}</div>
                       {days.map((day) => {
                         const booked = hourIsBooked(day, hour);
                         return (
