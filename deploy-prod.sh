@@ -10,8 +10,20 @@ echo "=== Deploy FaBu Production ==="
 cd /home/deploy/FaBu
 
 echo "1) Git Pull from main"
+# Automatisches Stashen, wenn ungestagte Änderungen vorhanden
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "Ungestagte Änderungen gefunden – stashe automatisch..."
+    git stash push -m "Auto-stash vor Deploy $(date)"
+    STASHED=true
+else
+    STASHED=false
+fi
 git config pull.rebase true
 git pull --rebase origin main
+if [ "$STASHED" = true ]; then
+    echo "Stash wiederherstellen..."
+    git stash pop || echo "Stash-Pop fehlgeschlagen – prüfe manuell."
+fi
 
 echo "2) Backend installieren"
 cd backend
