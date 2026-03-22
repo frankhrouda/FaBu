@@ -2,6 +2,7 @@
 
 # Skript: Deployment auf Produktionsserver
 # Auf Prod (VPS) ausführen: chmod +x deploy-prod.sh && ./deploy-prod.sh
+# Optional strikt ohne Auto-Sync: AUTO_SYNC=0 bash deploy-prod.sh
 
 set -euo pipefail
 
@@ -9,22 +10,44 @@ echo "=== Deploy FaBu Production ==="
 
 cd /home/deploy/FaBu
 
-echo "1) Git Pull from main"
+echo "1) Git Sync with origin/main"
+AUTO_SYNC="${AUTO_SYNC:-1}"
+
+# Auf Servern ist ein reiner chmod oft unerheblich; verhindert false-positive Dirty States.
+git config core.fileMode false
+
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if [ "$CURRENT_BRANCH" != "main" ]; then
-  echo "Fehler: Aktueller Branch ist '$CURRENT_BRANCH' (erwartet: main)."
-  exit 1
-fi
-
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Fehler: Lokale Änderungen vorhanden. Deployment wird abgebrochen."
-  echo "Bitte zuerst aufräumen (commit/stash/reset) und erneut deployen."
-  git status --short
-  exit 1
+  if [ "$AUTO_SYNC" = "1" ]; then
+    echo "Branch '$CURRENT_BRANCH' erkannt -> wechsle automatisch auf 'main'."
+    git checkout main
+  else
+    echo "Fehler: Aktueller Branch ist '$CURRENT_BRANCH' (erwartet: main)."
+    exit 1
+  fi
 fi
 
 git fetch origin main
-git pull --ff-only origin main
+
+LOCAL_HEAD="$(git rev-parse HEAD)"
+REMOTE_HEAD="$(git rev-parse origin/main)"
+HAS_LOCAL_CHANGES=false
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  HAS_LOCAL_CHANGES=true
+fi
+
+if [ "$HAS_LOCAL_CHANGES" = true ] || [ "$LOCAL_HEAD" != "$REMOTE_HEAD" ]; then
+  if [ "$AUTO_SYNC" = "1" ]; then
+    echo "Server-Repo ist nicht sauber/in sync -> setze auf origin/main zurueck."
+    git reset --hard origin/main
+  else
+    echo "Fehler: Lokaler Zustand weicht von origin/main ab."
+    git status --short
+    echo "LOCAL_HEAD:  $LOCAL_HEAD"
+    echo "REMOTE_HEAD: $REMOTE_HEAD"
+    exit 1
+  fi
+fi
 
 LOCAL_HEAD="$(git rev-parse HEAD)"
 REMOTE_HEAD="$(git rev-parse origin/main)"
