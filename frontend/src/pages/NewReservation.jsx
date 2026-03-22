@@ -27,6 +27,7 @@ export default function NewReservation() {
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [dragSelection, setDragSelection] = useState(null);
 
   useEffect(() => { api.get('/vehicles').then(setVehicles); }, []);
 
@@ -69,6 +70,9 @@ export default function NewReservation() {
 
   const set = (k) => (e) => {
     setForm((f) => ({ ...f, [k]: e.target.value }));
+    if (k === 'vehicle_id' || k === 'date' || k === 'time_from' || k === 'time_to') {
+      setDragSelection(null);
+    }
     setError('');
   };
 
@@ -93,6 +97,7 @@ export default function NewReservation() {
 
   const hours = buildReservationHours();
   const timeToDecimal = (t) => {
+    if (!t) return null;
     const [h, m] = t.split(':').map(Number);
     return h + m / 60;
   };
@@ -107,6 +112,84 @@ export default function NewReservation() {
   };
 
   const hourInUse = (hour) => Boolean(reservationForHour(hour));
+
+  const selectedFrom = timeToDecimal(form.time_from);
+  const selectedTo = timeToDecimal(form.time_to);
+  const hasSelectedRange = selectedFrom != null && selectedTo != null && selectedFrom < selectedTo;
+  const dragRangeStart = dragSelection ? Math.min(dragSelection.anchor, dragSelection.current) : null;
+  const dragRangeEnd = dragSelection ? Math.max(dragSelection.anchor, dragSelection.current) + 1 : null;
+
+  const hourInSelectedRange = (hour) => {
+    if (dragRangeStart != null && dragRangeEnd != null) {
+      return dragRangeStart < hour + 1 && dragRangeEnd > hour;
+    }
+    if (!hasSelectedRange) return false;
+    return selectedFrom < hour + 1 && selectedTo > hour;
+  };
+
+  const rangeHasBookedHours = (fromHour, toHourExclusive) => {
+    for (let h = fromHour; h < toHourExclusive; h += 1) {
+      if (hourInUse(h)) return true;
+    }
+    return false;
+  };
+
+  const applyRangeSelection = (fromHour, toHourExclusive) => {
+    if (rangeHasBookedHours(fromHour, toHourExclusive)) {
+      setError('Der gewaehlte Zeitraum enthaelt bereits gebuchte Stunden.');
+      return;
+    }
+
+    setForm((f) => ({
+      ...f,
+      time_from: formatHourValue(fromHour),
+      time_to: formatHourValue(toHourExclusive),
+    }));
+  };
+
+  const startDragSelection = (hour) => {
+    setError('');
+
+    if (hourInUse(hour)) {
+      setDragSelection(null);
+      setError('Diese Stunde ist bereits belegt. Bitte waehlen Sie freie Stunden.');
+      return;
+    }
+
+    setDragSelection({ anchor: hour, current: hour });
+  };
+
+  const updateDragSelection = (hour) => {
+    setDragSelection((currentSelection) => {
+      if (!currentSelection || hourInUse(hour)) return currentSelection;
+      if (currentSelection.current === hour) return currentSelection;
+      return { ...currentSelection, current: hour };
+    });
+  };
+
+  const finishDragSelection = () => {
+    if (!dragSelection) {
+      return;
+    }
+
+    const rangeStart = Math.min(dragSelection.anchor, dragSelection.current);
+    const rangeEndExclusive = Math.max(dragSelection.anchor, dragSelection.current) + 1;
+    applyRangeSelection(rangeStart, rangeEndExclusive);
+    setDragSelection(null);
+  };
+
+  useEffect(() => {
+    if (!dragSelection) return;
+
+    const handlePointerEnd = () => finishDragSelection();
+    window.addEventListener('pointerup', handlePointerEnd);
+    window.addEventListener('pointercancel', handlePointerEnd);
+
+    return () => {
+      window.removeEventListener('pointerup', handlePointerEnd);
+      window.removeEventListener('pointercancel', handlePointerEnd);
+    };
+  }, [dragSelection]);
 
   return (
     <div className="p-4 space-y-5">
@@ -232,24 +315,39 @@ export default function NewReservation() {
                 <h3 className="text-sm font-semibold text-gray-700">Tageskalender ({formatReservationHourRange()})</h3>
                 {dayLoading ? <span className="text-xs text-gray-500">Lade...</span> : <span className="text-xs text-gray-500">{dayReservations.length} Buchung(en)</span>}
               </div>
+              <p className="text-xs text-gray-500 mb-2">
+                Stunden klicken oder ziehen: Loslassen uebernimmt den Zeitraum.
+              </p>
               <div className="grid grid-cols-12 gap-1 text-center text-xs">
                 <div className="col-span-1 font-medium">Zeit</div>
                 <div className="col-span-11 font-medium">Status</div>
                 {hours.flatMap((hour) => {
                   const res = reservationForHour(hour);
+                  const isBooked = hourInUse(hour);
+                  const isSelected = hourInSelectedRange(hour);
                   const title = res
                     ? `Gebucht ${res.time_from}-${res.time_to} • ${res.user_name || 'Nutzer'} • ${res.reason || 'Kein Zweck'}`
                     : 'Frei';
 
                   return [
                     <div key={`label-${hour}`} className="col-span-1 py-1 bg-gray-50 border border-gray-100">{formatHourValue(hour)}</div>,
-                    <div
+                    <button
                       key={`status-${hour}`}
+                      type="button"
                       title={title}
-                      className={`col-span-11 py-1 border border-gray-100 ${hourInUse(hour) ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}
+                      onPointerDown={() => startDragSelection(hour)}
+                      onPointerEnter={() => updateDragSelection(hour)}
+                      disabled={isBooked}
+                      className={`col-span-11 py-1 border border-gray-100 transition-colors touch-none select-none ${
+                        isBooked
+                          ? 'bg-red-50 text-red-700 cursor-not-allowed'
+                          : isSelected
+                            ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer'
+                      }`}
                     >
-                      {hourInUse(hour) ? 'Gebucht' : 'Frei'}
-                    </div>,
+                      {isBooked ? 'Gebucht' : isSelected ? 'Ausgewaehlt' : 'Frei'}
+                    </button>,
                   ];
                 })}
               </div>
