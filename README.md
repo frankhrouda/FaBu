@@ -30,6 +30,37 @@ EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:3001/api npm run android
 npm run dev:mobile
 ```
 
+Hinweis: Die Mobile-App wird in diesem Repo bewusst separat unter `mobile/` verwaltet und nicht ueber npm workspaces gestartet.
+
+#### Android Voraussetzungen (Ubuntu)
+
+Wenn Android Studio und SDK installiert sind, aber `npm run android` Fehler wie
+`Failed to resolve the Android SDK path` oder `spawn adb ENOENT` zeigt,
+fehlen meist Umgebungsvariablen.
+
+In `~/.bashrc` eintragen:
+
+```bash
+export ANDROID_HOME="$HOME/Android"
+export ANDROID_SDK_ROOT="$HOME/Android"
+export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/cmdline-tools/bin"
+```
+
+Dann neu laden:
+
+```bash
+source ~/.bashrc
+```
+
+Pruefen:
+
+```bash
+adb version
+adb devices
+```
+
+Wenn ein Emulator laeuft, sollte dort z.B. `emulator-5554   device` erscheinen.
+
 ### Produktions-Deployment
 ```bash
 # Auf dem VPS (als deploy-User):

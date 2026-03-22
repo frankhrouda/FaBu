@@ -1,10 +1,10 @@
 {
   "name": "fabu",
   "private": true,
-  "workspaces": ["backend", "frontend", "mobile"],
+  "workspaces": ["backend", "frontend"],
   "scripts": {
     "dev": "concurrently -n \"API,WEB\" -c \"cyan,magenta\" \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
-    "dev:mobile": "npm run start --workspace=mobile",
+    "dev:mobile": "npm --prefix mobile run start",
     "install:all": "npm install"
   },
   "devDependencies": {
