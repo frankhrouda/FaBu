@@ -20,6 +20,27 @@ export class ApiError extends Error {
   }
 }
 
+function mapStatusMessage(status: number) {
+  switch (status) {
+    case 400:
+      return 'Ungueltige Eingabe. Bitte Daten pruefen.';
+    case 401:
+      return 'Sitzung abgelaufen. Bitte neu einloggen.';
+    case 403:
+      return 'Keine Berechtigung fuer diese Aktion.';
+    case 404:
+      return 'Der Eintrag wurde nicht gefunden.';
+    case 409:
+      return 'Konflikt mit vorhandenen Daten. Bitte pruefen.';
+    case 429:
+      return 'Zu viele Anfragen. Bitte kurz warten.';
+    case 500:
+      return 'Serverfehler. Bitte spaeter erneut versuchen.';
+    default:
+      return `HTTP ${status}`;
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -33,7 +54,7 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message = payload?.error || `HTTP ${response.status}`;
+    const message = payload?.error || mapStatusMessage(response.status);
 
     // Only trigger global unauthorized handling for authenticated requests.
     if (response.status === 401 && token && unauthorizedHandler) {

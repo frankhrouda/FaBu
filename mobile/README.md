@@ -60,6 +60,8 @@ npm run ios
 - Session-Token wird in `expo-secure-store` gespeichert.
 - Nach Login werden Fahrzeuge geladen.
 - Neue Reservierung prueft Verfuegbarkeit und erstellt den Eintrag ueber die Backend-API.
-- Reservierungsliste hat Status-Filter (Alle, Aktiv, Abgeschlossen, Storniert).
+- Reservierungsliste hat Status-Filter (Alle, Aktiv, Abgeschlossen, Storniert) und eine Suche.
+- Stornieren hat einen Bestaetigungsdialog.
 - Erfolgreiches Stornieren/Abschliessen zeigt einen kurzen Success-Hinweis.
+- API-Fehlercodes (`409`, `429`, `500` etc.) werden mit nutzerfreundlichen Meldungen behandelt.
 - Bei `401` (abgelaufener/ungueltiger Token) wird die Session zentral geloescht und auf Login zurueckgefallen.

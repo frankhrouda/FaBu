@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -23,6 +24,7 @@ export function ReservationsScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | Reservation['status']>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!successMessage) return;
@@ -78,9 +80,30 @@ export function ReservationsScreen() {
   }, [reservationsQuery.data]);
 
   const filteredData = useMemo(() => {
-    if (statusFilter === 'all') return sortedData;
-    return sortedData.filter((item) => item.status === statusFilter);
-  }, [sortedData, statusFilter]);
+    const query = searchQuery.trim().toLowerCase();
+
+    return sortedData.filter((item) => {
+      const statusMatches = statusFilter === 'all' || item.status === statusFilter;
+      if (!statusMatches) return false;
+
+      if (!query) return true;
+
+      const haystack = [
+        item.vehicle_name,
+        item.license_plate,
+        item.reason,
+        item.date,
+        item.time_from,
+        item.time_to,
+        item.status,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [sortedData, statusFilter, searchQuery]);
 
   function submitComplete(reservationId: number) {
     setActionError(null);
@@ -102,6 +125,17 @@ export function ReservationsScreen() {
     });
   }
 
+  function confirmCancel(reservationId: number) {
+    Alert.alert('Reservierung stornieren', 'Moechtest du diese Reservierung wirklich stornieren?', [
+      { text: 'Abbrechen', style: 'cancel' },
+      {
+        text: 'Stornieren',
+        style: 'destructive',
+        onPress: () => cancelMutation.mutate(reservationId),
+      },
+    ]);
+  }
+
   function renderItem({ item }: { item: Reservation }) {
     const isReserved = item.status === 'reserved';
     const isCompletePanelOpen = selectedCompleteId === item.id;
@@ -118,7 +152,7 @@ export function ReservationsScreen() {
           <View style={styles.actionsRow}>
             <Pressable
               style={[styles.actionButton, styles.cancelButton]}
-              onPress={() => cancelMutation.mutate(item.id)}
+              onPress={() => confirmCancel(item.id)}
               disabled={cancelMutation.isPending || completeMutation.isPending}
             >
               <Text style={styles.actionText}>Stornieren</Text>
@@ -202,6 +236,13 @@ export function ReservationsScreen() {
     <View style={styles.container}>
       {successMessage ? <Text style={styles.successToast}>{successMessage}</Text> : null}
       {!!actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+
+      <TextInput
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Suche: Fahrzeug, Datum, Grund ..."
+        style={styles.searchInput}
+      />
 
       <View style={styles.filterRow}>
         <FilterChip label="Alle" active={statusFilter === 'all'} onPress={() => setStatusFilter('all')} />
@@ -354,6 +395,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 10,
     fontWeight: '700',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#c8d2db',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 10,
   },
   filterRow: {
     flexDirection: 'row',
