@@ -1,6 +1,13 @@
+import 'dotenv/config';
 import jwt from 'jsonwebtoken';
 
-export const JWT_SECRET = process.env.JWT_SECRET || 'fabu-dev-secret-change-in-production';
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET is required. Set it in the environment before starting the backend.');
+}
+
+export const JWT_SECRET = jwtSecret;
 
 export function authenticate(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];

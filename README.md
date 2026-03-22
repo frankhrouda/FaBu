@@ -1,6 +1,6 @@
 # FaBu - Fahrzeugbuchungs-App
 
-Eine moderne Full-Stack-Anwendung für die Verwaltung von Fahrzeugreservierungen, entwickelt mit Node.js (Express + SQLite) und React (Vite + Tailwind CSS).
+Eine moderne Full-Stack-Anwendung fuer die Verwaltung von Fahrzeugreservierungen, entwickelt mit Node.js (Express + SQLite), React (Vite + Tailwind CSS) und React Native (Expo) fuer Mobile.
 
 ## 🚀 Schnellstart
 
@@ -16,6 +16,18 @@ Eine moderne Full-Stack-Anwendung für die Verwaltung von Fahrzeugreservierungen
 # Testen:
 # Frontend: http://localhost:5173
 # Backend: http://localhost:3001
+```
+
+### Mobile App (React Native + Expo)
+```bash
+# Einmalig installieren
+cd mobile && npm install
+
+# Beispiel fuer Android Emulator + lokales Backend
+EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:3001/api npm run android
+
+# Alternativ vom Repo-Root
+npm run dev:mobile
 ```
 
 ### Produktions-Deployment
@@ -94,12 +106,27 @@ FaBu/
 │   │   ├── pages/
 │   │   └── App.jsx
 │   └── package.json
+├── mobile/           # React Native Expo App
+│   ├── src/
+│   │   ├── screens/
+│   │   ├── auth/
+│   │   ├── api/
+│   │   └── navigation/
+│   └── package.json
 ├── setup-user.sh     # Server-User-Setup
 ├── install-server.sh # Server-Software-Installation
 ├── local-dev.sh      # Lokales Setup
 ├── deploy-prod.sh    # Prod-Deployment
 └── README.md         # Diese Datei
 ```
+
+## 📘 API-Dokumentation
+
+- API-Vertrag fuer Web- und Mobile-Clients: `backend/API.md`
+- Android-Kotlin Referenz (Retrofit, Auth-Interceptor, Token-Storage): `backend/ANDROID_CLIENT_REFERENCE.md`
+- Android Screen-by-Screen Backlog (Implementierungsreihenfolge): `backend/ANDROID_SCREEN_BACKLOG.md`
+- Vollstaendiges Kotlin Retrofit-Template (alle Endpunkte + DTOs): `backend/android-template/FabuApiTemplate.kt`
+- React Native Expo Setup (MVP mit Login/Fahrzeuge/Reservierung): `mobile/README.md`
 
 ## 🔐 Sicherheit
 
@@ -108,6 +135,37 @@ FaBu/
 - UFW Firewall aktiv
 - HTTPS via Let's Encrypt
 - AppArmor für Nginx (empfohlen)
+
+### Backend-Sicherheitskonfiguration (wichtig)
+
+Das Backend erwartet ab sofort eine gesetzte Umgebungsvariable `JWT_SECRET`.
+Ohne `JWT_SECRET` startet der Server nicht.
+
+#### Lokal starten
+```bash
+cd backend
+# Option A (empfohlen): backend/.env mit JWT_SECRET anlegen, dann einfach:
+cp .env.example .env
+npm run dev
+
+# Option B: Secret inline setzen
+JWT_SECRET="dev-strong-secret" npm run dev
+```
+
+#### Produktion (Beispiel)
+Setze `JWT_SECRET` in der Prozessumgebung (z.B. PM2 Ecosystem, Systemd, CI/CD Secret Store).
+
+Zusätzlich sind folgende Schutzmechanismen aktiv:
+- `helmet` für Security-Header
+- Rate-Limits auf Auth-Endpunkten:
+  - `POST /api/auth/login`: max. 10 Requests pro 15 Minuten
+  - `POST /api/auth/register`: max. 10 Requests pro 15 Minuten
+- Allgemeines API-Limit auf `/api`: max. 300 Requests pro 15 Minuten
+
+Bei Überschreitung antwortet die API mit einem JSON-Fehlerobjekt:
+```json
+{ "error": "Zu viele Anfragen. Bitte spaeter erneut versuchen." }
+```
 
 ## 📞 Support
 
