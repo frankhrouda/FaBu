@@ -246,7 +246,7 @@ export default function Calendar() {
                         const showVehicleColors = isAdmin && selectedVehicleId === 'all';
 
                         const cellClass = booked
-                          ? (showVehicleColors ? 'bg-white text-gray-700' : 'bg-red-100 text-red-700')
+                          ? (showVehicleColors ? 'bg-red-100 text-red-900' : 'bg-red-100 text-red-700')
                           : 'bg-emerald-50 text-emerald-700';
 
                         const cellTitle = buildCellTitle(overlappingReservations);
@@ -260,13 +260,13 @@ export default function Calendar() {
                             {booked ? (
                               isAdmin ? (
                                 showVehicleColors ? (
-                                  <div className="h-full flex items-center justify-center gap-1 flex-wrap">
+                                  <div className="h-full flex items-center justify-center gap-1.5 flex-wrap">
                                     {overlappingReservations.map((res) => {
                                       const color = vehicleColorMap[res.vehicle_id] || VEHICLE_COLOR_PALETTE[0];
                                       return (
                                         <span
                                           key={`dot-${day}-${hour}-${res.id}`}
-                                          className={`w-2 h-2 rounded-full ${color.dot}`}
+                                          className={`w-3.5 h-3.5 rounded-full ring-1 ring-white ${color.dot}`}
                                         />
                                       );
                                     })}
@@ -308,7 +308,7 @@ export default function Calendar() {
                         key={`legend-${vehicle.id}`}
                         className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border ${color.label}`}
                       >
-                        <span className={`w-2 h-2 rounded-full ${color.dot}`} />
+                        <span className={`w-3 h-3 rounded-full ${color.dot}`} />
                         {vehicle.name}
                       </span>
                     );
