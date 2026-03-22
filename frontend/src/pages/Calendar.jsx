@@ -12,6 +12,17 @@ import {
 } from '../utils/helpers';
 import { Link } from 'react-router-dom';
 
+const VEHICLE_COLOR_PALETTE = [
+  { dot: 'bg-sky-500', soft: 'bg-sky-50 border-sky-200 text-sky-700', label: 'bg-sky-100 text-sky-700 border-sky-200' },
+  { dot: 'bg-emerald-500', soft: 'bg-emerald-50 border-emerald-200 text-emerald-700', label: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { dot: 'bg-amber-500', soft: 'bg-amber-50 border-amber-200 text-amber-700', label: 'bg-amber-100 text-amber-700 border-amber-200' },
+  { dot: 'bg-rose-500', soft: 'bg-rose-50 border-rose-200 text-rose-700', label: 'bg-rose-100 text-rose-700 border-rose-200' },
+  { dot: 'bg-violet-500', soft: 'bg-violet-50 border-violet-200 text-violet-700', label: 'bg-violet-100 text-violet-700 border-violet-200' },
+  { dot: 'bg-cyan-500', soft: 'bg-cyan-50 border-cyan-200 text-cyan-700', label: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  { dot: 'bg-lime-500', soft: 'bg-lime-50 border-lime-200 text-lime-700', label: 'bg-lime-100 text-lime-700 border-lime-200' },
+  { dot: 'bg-orange-500', soft: 'bg-orange-50 border-orange-200 text-orange-700', label: 'bg-orange-100 text-orange-700 border-orange-200' },
+];
+
 function getNextDays(days = 14) {
   const result = [];
   const start = new Date();
@@ -79,6 +90,8 @@ export default function Calendar() {
     return items.sort((a, b) => a.time_from.localeCompare(b.time_from));
   };
 
+  const activeReservations = reservations.filter((r) => r.status !== 'cancelled');
+
   const hours = buildReservationHours();
 
   const parseDecimalTime = (time) => {
@@ -86,16 +99,36 @@ export default function Calendar() {
     return h + (m / 60);
   };
 
-  const hourIsBooked = (day, hour) => {
-    return reservations.some((r) => {
+  const vehicleColorMap = vehicles.reduce((acc, vehicle, index) => {
+    acc[vehicle.id] = VEHICLE_COLOR_PALETTE[index % VEHICLE_COLOR_PALETTE.length];
+    return acc;
+  }, {});
+
+  const getOverlappingReservations = (day, hour) => {
+    return activeReservations.filter((r) => {
       if (r.date !== day) return false;
-      if (r.status === 'cancelled') return false;
       const from = parseDecimalTime(r.time_from);
       const to = parseDecimalTime(r.time_to);
       const slotStart = hour;
       const slotEnd = hour + 1;
       return from < slotEnd && to > slotStart;
-    });
+    }).sort((a, b) => a.time_from.localeCompare(b.time_from));
+  };
+
+  const hourIsBooked = (day, hour) => {
+    return getOverlappingReservations(day, hour).length > 0;
+  };
+
+  const buildCellTitle = (items) => {
+    if (items.length === 0) return 'Frei';
+    return items
+      .map((res) => {
+        const vehicle = vehicles.find((v) => v.id === res.vehicle_id);
+        const vehicleLabel = vehicle ? `${vehicle.name} (${vehicle.license_plate})` : `Fahrzeug ${res.vehicle_id}`;
+        const userLabel = res.user_name || 'Nutzer';
+        return `${res.time_from}-${res.time_to} | ${vehicleLabel} | ${userLabel}`;
+      })
+      .join('\n');
   };
 
   const filteredVehicles = isAdmin
@@ -208,13 +241,49 @@ export default function Calendar() {
                     <Fragment key={`row-${hour}`}>
                       <div className="px-2 py-1 text-xs text-gray-500 bg-gray-50 border-t border-gray-200">{formatHourValue(hour)}</div>
                       {days.map((day) => {
-                        const booked = hourIsBooked(day, hour);
+                        const overlappingReservations = getOverlappingReservations(day, hour);
+                        const booked = overlappingReservations.length > 0;
+                        const showVehicleColors = isAdmin && selectedVehicleId === 'all';
+
+                        const cellClass = booked
+                          ? (showVehicleColors ? 'bg-white text-gray-700' : 'bg-red-100 text-red-700')
+                          : 'bg-emerald-50 text-emerald-700';
+
+                        const cellTitle = buildCellTitle(overlappingReservations);
+
                         return (
                           <div
                             key={`${day}-${hour}`}
-                            className={`h-8 px-1 border-t border-l border-gray-100 text-xs text-center ${booked ? 'bg-red-100 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}
+                            title={cellTitle}
+                            className={`h-8 px-1 border-t border-l border-gray-100 text-xs ${cellClass}`}
                           >
-                            {booked ? 'X' : 'OK'}
+                            {booked ? (
+                              isAdmin ? (
+                                showVehicleColors ? (
+                                  <div className="h-full flex items-center justify-center gap-1 flex-wrap">
+                                    {overlappingReservations.map((res) => {
+                                      const color = vehicleColorMap[res.vehicle_id] || VEHICLE_COLOR_PALETTE[0];
+                                      return (
+                                        <span
+                                          key={`dot-${day}-${hour}-${res.id}`}
+                                          className={`w-2 h-2 rounded-full ${color.dot}`}
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="h-full flex items-center justify-center px-1">
+                                    <span className="truncate text-[10px] font-medium">
+                                      {overlappingReservations[0]?.user_name || 'Nutzer'}
+                                    </span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="h-full flex items-center justify-center">X</div>
+                              )
+                            ) : (
+                              <div className="h-full flex items-center justify-center">OK</div>
+                            )}
                           </div>
                         );
                       })}
@@ -225,7 +294,27 @@ export default function Calendar() {
               <div className="text-xs text-gray-500 flex gap-3">
                 <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md">OK = frei</span>
                 <span className="px-2 py-1 bg-red-100 text-red-700 rounded-md">X = gebucht</span>
+                {isAdmin && selectedVehicleId === 'all' && (
+                  <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-md">Farbpunkte = Fahrzeug</span>
+                )}
               </div>
+
+              {isAdmin && selectedVehicleId === 'all' && (
+                <div className="pt-1 flex flex-wrap items-center gap-2 text-xs">
+                  {filteredVehicles.map((vehicle) => {
+                    const color = vehicleColorMap[vehicle.id] || VEHICLE_COLOR_PALETTE[0];
+                    return (
+                      <span
+                        key={`legend-${vehicle.id}`}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border ${color.label}`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${color.dot}`} />
+                        {vehicle.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -249,11 +338,19 @@ export default function Calendar() {
                     ) : (
                       <div className="space-y-1">
                         {reservedByDate(day).map((res) => (
-                          <div key={res.id} className="flex items-start justify-between bg-gray-50 border border-gray-100 rounded-lg p-2">
+                          <div
+                            key={res.id}
+                            className={`flex items-start justify-between rounded-lg p-2 border ${selectedVehicleId === 'all' ? (vehicleColorMap[res.vehicle_id]?.soft || 'bg-gray-50 border-gray-200 text-gray-700') : 'bg-gray-50 border-gray-100'}`}
+                          >
                             <div>
                               <p className="text-xs font-medium text-gray-700">{res.time_from} - {res.time_to}</p>
                               <p className="text-xs text-gray-500" title={res.reason}>{res.reason}</p>
-                              <p className="text-[11px] text-gray-400">{res.user_name || 'Nutzer'} • {statusLabel(res.status)}</p>
+                              {selectedVehicleId === 'all' && (
+                                <p className="text-[11px] text-gray-500">{res.vehicle_name || `Fahrzeug ${res.vehicle_id}`}</p>
+                              )}
+                              {isAdmin && (
+                                <p className="text-[11px] text-gray-400">{res.user_name || 'Nutzer'} • {statusLabel(res.status)}</p>
+                              )}
                             </div>
                             <span className={`text-[11px] ${statusBadge(res.status)} px-1.5 py-0.5 rounded-full`}>{statusLabel(res.status)}</span>
                           </div>
