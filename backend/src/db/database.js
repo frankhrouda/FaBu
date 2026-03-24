@@ -48,6 +48,7 @@ function initSchema() {
       user_id INTEGER NOT NULL,
       vehicle_id INTEGER NOT NULL,
       date TEXT NOT NULL,
+      date_to TEXT,
       time_from TEXT NOT NULL,
       time_to TEXT NOT NULL,
       reason TEXT NOT NULL,
@@ -62,6 +63,7 @@ function initSchema() {
 
   ensureColumnExists('vehicles', 'price_per_km', "REAL NOT NULL DEFAULT 0");
   ensureColumnExists('vehicles', 'flat_fee', 'REAL');
+  ensureColumnExists('reservations', 'date_to', 'TEXT');
 }
 
 function ensureColumnExists(tableName, columnName, columnDef) {

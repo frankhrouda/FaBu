@@ -81,12 +81,18 @@ export default function Calendar() {
   }, [selectedVehicleId]);
 
   const daysWithBookings = days.map((day) => {
-    const dayRes = reservations.filter((r) => r.date === day);
+    const dayRes = reservations.filter((r) => {
+      const endDate = r.date_to || r.date;
+      return r.date <= day && day <= endDate;
+    });
     return { day, reservations: dayRes };
   });
 
   const reservedByDate = (day) => {
-    const items = reservations.filter((r) => r.date === day);
+    const items = reservations.filter((r) => {
+      const endDate = r.date_to || r.date;
+      return r.date <= day && day <= endDate;
+    });
     return items.sort((a, b) => a.time_from.localeCompare(b.time_from));
   };
 
@@ -106,11 +112,22 @@ export default function Calendar() {
 
   const getOverlappingReservations = (day, hour) => {
     return activeReservations.filter((r) => {
-      if (r.date !== day) return false;
+      const endDate = r.date_to || r.date;
+      if (r.date > day || endDate < day) return false;
+
+      // Middle day of a multi-day reservation: entire day blocked
+      if (r.date < day && endDate > day) return true;
+
       const from = parseDecimalTime(r.time_from);
       const to = parseDecimalTime(r.time_to);
       const slotStart = hour;
       const slotEnd = hour + 1;
+
+      // Multi-day start day: blocked from departure time onward
+      if (r.date === day && endDate > day) return from < slotEnd;
+      // Multi-day end day: blocked up to return time
+      if (endDate === day && r.date < day) return to > slotStart;
+      // Same-day: normal time overlap
       return from < slotEnd && to > slotStart;
     }).sort((a, b) => a.time_from.localeCompare(b.time_from));
   };
@@ -343,7 +360,12 @@ export default function Calendar() {
                             className={`flex items-start justify-between rounded-lg p-2 border ${selectedVehicleId === 'all' ? (vehicleColorMap[res.vehicle_id]?.soft || 'bg-gray-50 border-gray-200 text-gray-700') : 'bg-gray-50 border-gray-100'}`}
                           >
                             <div>
-                              <p className="text-xs font-medium text-gray-700">{res.time_from} - {res.time_to}</p>
+                              <p className="text-xs font-medium text-gray-700">
+                                {res.time_from} - {res.time_to}
+                                {res.date_to && res.date_to !== res.date && (
+                                  <span className="ml-1 text-gray-400 font-normal">({res.date} – {res.date_to})</span>
+                                )}
+                              </p>
                               <p className="text-xs text-gray-500" title={res.reason}>{res.reason}</p>
                               {selectedVehicleId === 'all' && (
                                 <p className="text-[11px] text-gray-500">{res.vehicle_name || `Fahrzeug ${res.vehicle_id}`}</p>

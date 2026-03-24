@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import { useToast, ToastContainer } from '../components/Toast';
-import { statusBadge, formatDate, formatKm } from '../utils/helpers';
+import { statusBadge, formatDate, formatDateRange, formatKm } from '../utils/helpers';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -56,7 +56,7 @@ export default function Dashboard() {
 
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = reservations
-    .filter((r) => r.status === 'reserved' && r.date >= today)
+    .filter((r) => r.status === 'reserved' && (r.date_to || r.date) >= today)
     .slice(0, 3);
   const stats = {
     reserved: reservations.filter((r) => r.status === 'reserved').length,
@@ -129,7 +129,12 @@ export default function Dashboard() {
         <Modal title="Fahrt abschließen" onClose={() => setCompleteModal(null)}>
           <div className="mb-4 p-3 bg-indigo-50 rounded-xl text-sm text-indigo-700">
             <p className="font-semibold">{completeModal.vehicle_name}</p>
-            <p className="text-indigo-500">{formatDate(completeModal.date)} · {completeModal.time_from} – {completeModal.time_to}</p>
+            <p className="text-indigo-500">
+              {completeModal.date_to && completeModal.date_to !== completeModal.date
+                ? `${formatDate(completeModal.date)} – ${formatDate(completeModal.date_to)}`
+                : formatDate(completeModal.date)}
+              {' · '}{completeModal.time_from} – {completeModal.time_to}
+            </p>
           </div>
           <form onSubmit={handleComplete} className="space-y-4">
             <div>
@@ -213,7 +218,7 @@ function ReservationPreview({ reservation: r, onComplete, onCancel }) {
             <p className="text-xs text-gray-500 mt-0.5">{r.license_plate}</p>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-sm font-medium text-gray-700">{formatDate(r.date)}</p>
+            <p className="text-sm font-medium text-gray-700">{formatDateRange(r.date, r.date_to)}</p>
             <p className="text-xs text-gray-500">{r.time_from} – {r.time_to}</p>
           </div>
         </div>

@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import { useToast, ToastContainer } from '../components/Toast';
-import { statusBadge, statusLabel, formatDate, formatKm } from '../utils/helpers';
+import { statusBadge, statusLabel, formatDate, formatDateRange, formatKm } from '../utils/helpers';
 
 const FILTERS = ['Alle', 'Reserviert', 'Abgeschlossen', 'Storniert'];
 const filterMap = { 'Alle': null, 'Reserviert': 'reserved', 'Abgeschlossen': 'completed', 'Storniert': 'cancelled' };
@@ -124,7 +124,12 @@ export default function Reservations() {
         <Modal title="Fahrt abschließen" onClose={() => setCompleteModal(null)}>
           <div className="mb-4 p-3 bg-indigo-50 rounded-xl text-sm text-indigo-700">
             <p className="font-semibold">{completeModal.vehicle_name}</p>
-            <p className="text-indigo-500">{formatDate(completeModal.date)} · {completeModal.time_from} – {completeModal.time_to}</p>
+            <p className="text-indigo-500">
+              {completeModal.date_to && completeModal.date_to !== completeModal.date
+                ? `${formatDate(completeModal.date)} – ${formatDate(completeModal.date_to)}`
+                : formatDate(completeModal.date)}
+              {' · '}{completeModal.time_from} – {completeModal.time_to}
+            </p>
           </div>
           <form onSubmit={handleComplete} className="space-y-4">
             <div>
@@ -184,7 +189,7 @@ export default function Reservations() {
 }
 
 function ReservationCard({ reservation: r, showUser, onComplete, onCancel }) {
-  const isPast = r.date < new Date().toISOString().slice(0, 10);
+  const isPast = (r.date_to || r.date) < new Date().toISOString().slice(0, 10);
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -203,7 +208,7 @@ function ReservationCard({ reservation: r, showUser, onComplete, onCancel }) {
             <p className="text-xs text-gray-400 font-mono">{r.license_plate}</p>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-sm font-medium text-gray-700">{formatDate(r.date)}</p>
+            <p className="text-sm font-medium text-gray-700">{formatDateRange(r.date, r.date_to)}</p>
             <p className="text-xs text-gray-500">{r.time_from} – {r.time_to}</p>
           </div>
         </div>

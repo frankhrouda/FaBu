@@ -3,7 +3,7 @@ import { Users, ShieldCheck, User, Trash2, Crown, FileDown, FileText } from 'luc
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast, ToastContainer } from '../components/Toast';
-import { formatDate, formatKm } from '../utils/helpers';
+import { formatDate, formatDateRange, formatKm } from '../utils/helpers';
 
 function getMonthDateRange(monthValue) {
   if (!monthValue) return { from: '', to: '' };
@@ -503,7 +503,7 @@ export default function Admin() {
                       <p className="text-xs text-gray-400 font-mono">{r.license_plate}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-gray-700">{formatDate(r.date)}</p>
+                      <p className="text-sm font-medium text-gray-700">{formatDateRange(r.date, r.date_to)}</p>
                       <p className="text-xs text-gray-500">{r.time_from} – {r.time_to}</p>
                     </div>
                   </div>

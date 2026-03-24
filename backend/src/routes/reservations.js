@@ -21,18 +21,21 @@ router.get('/', authenticate, (req, res) => {
 });
 
 router.get('/availability', authenticate, (req, res) => {
-  const { vehicle_id, date, time_from, time_to, exclude_id } = req.query;
+  const { vehicle_id, date, date_to, time_from, time_to, exclude_id } = req.query;
   if (!vehicle_id || !date || !time_from || !time_to) {
     return res.status(400).json({ error: 'Parameter fehlen' });
   }
 
+  const endDate = date_to || date;
   const db = getDb();
+  // Conflict: existing.start < new.end AND existing.end > new.start (datetime string comparison)
   let query = `
     SELECT id FROM reservations
-    WHERE vehicle_id = ? AND date = ? AND status != 'cancelled'
-    AND NOT (time_to <= ? OR time_from >= ?)
+    WHERE vehicle_id = ? AND status != 'cancelled'
+    AND (date || ' ' || time_from) < (? || ' ' || ?)
+    AND (COALESCE(date_to, date) || ' ' || time_to) > (? || ' ' || ?)
   `;
-  const params = [vehicle_id, date, time_from, time_to];
+  const params = [vehicle_id, endDate, time_to, date, time_from];
 
   if (exclude_id) {
     query += ' AND id != ?';
@@ -44,11 +47,16 @@ router.get('/availability', authenticate, (req, res) => {
 });
 
 router.post('/', authenticate, (req, res) => {
-  const { vehicle_id, date, time_from, time_to, reason } = req.body;
+  const { vehicle_id, date, date_to, time_from, time_to, reason } = req.body;
   if (!vehicle_id || !date || !time_from || !time_to || !reason) {
     return res.status(400).json({ error: 'Alle Felder sind erforderlich' });
   }
-  if (time_from >= time_to) {
+
+  const endDate = date_to || date;
+  if (endDate < date) {
+    return res.status(400).json({ error: 'Enddatum muss am oder nach dem Startdatum liegen' });
+  }
+  if (endDate === date && time_from >= time_to) {
     return res.status(400).json({ error: 'Endzeit muss nach Startzeit liegen' });
   }
 
@@ -59,17 +67,18 @@ router.post('/', authenticate, (req, res) => {
 
   const conflict = db.prepare(`
     SELECT id FROM reservations
-    WHERE vehicle_id = ? AND date = ? AND status != 'cancelled'
-    AND NOT (time_to <= ? OR time_from >= ?)
-  `).get(vehicle_id, date, time_from, time_to);
+    WHERE vehicle_id = ? AND status != 'cancelled'
+    AND (date || ' ' || time_from) < (? || ' ' || ?)
+    AND (COALESCE(date_to, date) || ' ' || time_to) > (? || ' ' || ?)
+  `).get(vehicle_id, endDate, time_to, date, time_from);
 
   if (conflict) {
     return res.status(409).json({ error: 'Fahrzeug ist in diesem Zeitraum bereits reserviert' });
   }
 
   const result = db.prepare(
-    'INSERT INTO reservations (user_id, vehicle_id, date, time_from, time_to, reason) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(req.user.id, vehicle_id, date, time_from, time_to, reason.trim());
+    'INSERT INTO reservations (user_id, vehicle_id, date, date_to, time_from, time_to, reason) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(req.user.id, vehicle_id, date, endDate, time_from, time_to, reason.trim());
 
   const reservation = db.prepare(`${WITH_DETAILS} WHERE r.id = ?`).get(result.lastInsertRowid);
   res.status(201).json(reservation);

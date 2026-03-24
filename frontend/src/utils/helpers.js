@@ -9,6 +9,11 @@ export function formatDate(dateStr) {
   });
 }
 
+export function formatDateRange(dateFrom, dateTo) {
+  if (!dateTo || dateTo === dateFrom) return formatDate(dateFrom);
+  return `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
+}
+
 export const RESERVATION_HOUR_START = 8;
 export const RESERVATION_HOUR_END = 22;
 

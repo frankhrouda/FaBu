@@ -4,6 +4,7 @@ import { ArrowLeft, Car, Calendar, Clock, FileText, CheckCircle2 } from 'lucide-
 import { api } from '../api/client';
 import {
   buildReservationHours,
+  formatDate,
   formatHourValue,
   formatReservationHourRange,
   RESERVATION_HOUR_END,
@@ -17,6 +18,7 @@ export default function NewReservation() {
   const [form, setForm] = useState({
     vehicle_id: '',
     date: new Date().toISOString().slice(0, 10),
+    date_to: new Date().toISOString().slice(0, 10),
     time_from: '',
     time_to: '',
     reason: '',
@@ -39,18 +41,26 @@ export default function NewReservation() {
 
     setDayLoading(true);
     api.get(`/reservations/vehicle/${form.vehicle_id}`)
-      .then((items) => setDayReservations(items.filter((r) => r.date === form.date)))
+      .then((items) => setDayReservations(items.filter((r) => {
+        const endDate = r.date_to || r.date;
+        return r.date <= form.date && form.date <= endDate;
+      })))
       .catch(() => setDayReservations([]))
       .finally(() => setDayLoading(false));
   }, [form.vehicle_id, form.date]);
 
   // Check availability when all fields are filled
   useEffect(() => {
-    if (!form.vehicle_id || !form.date || !form.time_from || !form.time_to) {
+    if (!form.vehicle_id || !form.date || !form.date_to || !form.time_from || !form.time_to) {
       setAvailability(null);
       return;
     }
-    if (form.time_from >= form.time_to) {
+    if (form.date_to < form.date) {
+      setAvailability(null);
+      return;
+    }
+    // Same-day: departure must be before return time
+    if (form.date === form.date_to && form.time_from >= form.time_to) {
       setAvailability(null);
       return;
     }
@@ -59,6 +69,7 @@ export default function NewReservation() {
     const params = new URLSearchParams({
       vehicle_id: form.vehicle_id,
       date: form.date,
+      date_to: form.date_to,
       time_from: form.time_from,
       time_to: form.time_to,
     });
@@ -66,11 +77,19 @@ export default function NewReservation() {
       .then((r) => setAvailability(r.available))
       .catch(() => setAvailability(null))
       .finally(() => setChecking(false));
-  }, [form.vehicle_id, form.date, form.time_from, form.time_to]);
+  }, [form.vehicle_id, form.date, form.date_to, form.time_from, form.time_to]);
 
   const set = (k) => (e) => {
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-    if (k === 'vehicle_id' || k === 'date' || k === 'time_from' || k === 'time_to') {
+    const value = e.target.value;
+    setForm((f) => {
+      const next = { ...f, [k]: value };
+      // Auto-advance date_to if start date moves past it
+      if (k === 'date' && value > next.date_to) {
+        next.date_to = value;
+      }
+      return next;
+    });
+    if (k === 'vehicle_id' || k === 'date' || k === 'date_to' || k === 'time_from' || k === 'time_to') {
       setDragSelection(null);
     }
     setError('');
@@ -105,8 +124,16 @@ export default function NewReservation() {
   const reservationForHour = (hour) => {
     return dayReservations.find((r) => {
       if (r.status === 'cancelled') return false;
+      const endDate = r.date_to || r.date;
+      // Middle day of a multi-day reservation: entire day blocked
+      if (r.date < form.date && endDate > form.date) return true;
       const start = timeToDecimal(r.time_from);
       const end = timeToDecimal(r.time_to);
+      // Multi-day start day: blocked from departure time to end of visible range
+      if (r.date === form.date && endDate > form.date) return start < hour + 1;
+      // Multi-day end day: blocked from start of visible range to return time
+      if (endDate === form.date && r.date < form.date) return end > hour;
+      // Same-day reservation: normal time overlap
       return start < hour + 1 && end > hour;
     });
   };
@@ -247,17 +274,36 @@ export default function NewReservation() {
           <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-indigo-500" /> Datum & Uhrzeit
           </h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Datum</label>
-            <input
-              type="date"
-              value={form.date}
-              min={today}
-              onChange={set('date')}
-              required
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Startdatum</label>
+              <input
+                type="date"
+                value={form.date}
+                min={today}
+                onChange={set('date')}
+                required
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Enddatum</label>
+              <input
+                type="date"
+                value={form.date_to}
+                min={form.date}
+                onChange={set('date_to')}
+                required
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
           </div>
+          {form.date_to > form.date && (
+            <div className="flex items-center gap-2 text-xs text-indigo-700 bg-indigo-50 px-3 py-2 rounded-lg">
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              Mehrtägige Reservierung: {formatDate(form.date)} – {formatDate(form.date_to)}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">Von</label>
@@ -308,8 +354,8 @@ export default function NewReservation() {
             </div>
           )}
 
-          {/* Tageskalender für gewähltes Fahrzeug+Datum */}
-          {form.vehicle_id && form.date && (
+          {/* Tageskalender nur für eintägige Reservierungen */}
+          {form.vehicle_id && form.date && form.date === form.date_to && (
             <section className="mt-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-700">Tageskalender ({formatReservationHourRange()})</h3>
