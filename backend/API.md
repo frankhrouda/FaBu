@@ -105,6 +105,8 @@ Antwort `200`:
     "license_plate": "B-AB-123",
     "type": "PKW",
     "description": "",
+    "price_per_km": 0.35,
+    "flat_fee": 2.5,
     "active": 1,
     "created_at": "2026-03-22 10:00:00"
   }
@@ -122,9 +124,14 @@ Request:
   "name": "VW Golf",
   "license_plate": "B-AB-123",
   "type": "PKW",
-  "description": "Poolfahrzeug"
+  "description": "Poolfahrzeug",
+  "price_per_km": 0.35,
+  "flat_fee": 2.5
 }
 ```
+
+- `price_per_km`: individueller Kilometerpreis des Fahrzeugs (optional, Default `0`)
+- `flat_fee`: optionale Pauschale pro Fahrt (`null` oder Zahl >= 0)
 
 Antwort `201`: Fahrzeugobjekt.
 
@@ -140,6 +147,8 @@ Request:
   "license_plate": "B-AB-123",
   "type": "PKW",
   "description": "Updated",
+  "price_per_km": 0.35,
+  "flat_fee": 2.5,
   "active": 1
 }
 ```
@@ -284,6 +293,49 @@ Antwort `200`:
 ```
 
 Moegliche Fehler: `400`, `401`, `403`, `429`, `500`
+
+### GET `/users/:id/km-summary?from=YYYY-MM-DD&to=YYYY-MM-DD` (auth + admin)
+
+Liefert Kilometer- und Kosten-Auswertung eines Benutzers im Zeitraum.
+
+Antwort `200`:
+
+```json
+{
+  "user": {
+    "id": 3,
+    "name": "Max Mustermann",
+    "email": "max@example.com"
+  },
+  "period": {
+    "from": "2026-03-01",
+    "to": "2026-03-31"
+  },
+  "totals": {
+    "total_trips": 12,
+    "total_km": 345,
+    "total_km_cost": 120.75,
+    "total_flat_cost": 18,
+    "total_cost": 138.75
+  },
+  "byVehicle": [
+    {
+      "vehicle_id": 1,
+      "vehicle_name": "VW Golf",
+      "license_plate": "B-AB-123",
+      "price_per_km": 0.35,
+      "flat_fee": 2.5,
+      "trips": 6,
+      "total_km": 210,
+      "km_cost": 73.5,
+      "flat_cost": 15,
+      "total_cost": 88.5
+    }
+  ]
+}
+```
+
+Moegliche Fehler: `400`, `401`, `403`, `404`, `429`, `500`
 
 ## Rate Limits
 

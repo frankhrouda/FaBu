@@ -37,6 +37,8 @@ function initSchema() {
       license_plate TEXT UNIQUE NOT NULL,
       type TEXT NOT NULL DEFAULT 'PKW',
       description TEXT DEFAULT '',
+      price_per_km REAL NOT NULL DEFAULT 0,
+      flat_fee REAL,
       active INTEGER NOT NULL DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -57,4 +59,15 @@ function initSchema() {
       FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
     );
   `);
+
+  ensureColumnExists('vehicles', 'price_per_km', "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists('vehicles', 'flat_fee', 'REAL');
+}
+
+function ensureColumnExists(tableName, columnName, columnDef) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  const hasColumn = columns.some((column) => column.name === columnName);
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+  }
 }

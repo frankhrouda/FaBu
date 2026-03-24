@@ -8,7 +8,14 @@ import { vehicleTypeIcon } from '../utils/helpers';
 
 const VEHICLE_TYPES = ['PKW', 'LKW', 'Transporter', 'Motorrad', 'Sonstiges'];
 
-const emptyForm = { name: '', license_plate: '', type: 'PKW', description: '' };
+const emptyForm = {
+  name: '',
+  license_plate: '',
+  type: 'PKW',
+  description: '',
+  price_per_km: '0',
+  flat_fee: '',
+};
 
 export default function Vehicles() {
   const { user } = useAuth();
@@ -28,7 +35,14 @@ export default function Vehicles() {
 
   const openAdd = () => { setForm(emptyForm); setModal('add'); };
   const openEdit = (v) => {
-    setForm({ name: v.name, license_plate: v.license_plate, type: v.type, description: v.description || '' });
+    setForm({
+      name: v.name,
+      license_plate: v.license_plate,
+      type: v.type,
+      description: v.description || '',
+      price_per_km: String(v.price_per_km ?? 0),
+      flat_fee: v.flat_fee == null ? '' : String(v.flat_fee),
+    });
     setModal(v);
   };
 
@@ -37,12 +51,19 @@ export default function Vehicles() {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
+
+    const payload = {
+      ...form,
+      price_per_km: form.price_per_km,
+      flat_fee: form.flat_fee,
+    };
+
     try {
       if (modal === 'add') {
-        await api.post('/vehicles', form);
+        await api.post('/vehicles', payload);
         show('Fahrzeug wurde hinzugefügt');
       } else {
-        await api.put(`/vehicles/${modal.id}`, { ...form, active: modal.active });
+        await api.put(`/vehicles/${modal.id}`, { ...payload, active: modal.active });
         show('Fahrzeug wurde aktualisiert');
       }
       setModal(null);
@@ -58,7 +79,11 @@ export default function Vehicles() {
     try {
       await api.put(`/vehicles/${v.id}`, {
         name: v.name, license_plate: v.license_plate,
-        type: v.type, description: v.description, active: v.active ? 0 : 1,
+        type: v.type,
+        description: v.description,
+        price_per_km: v.price_per_km,
+        flat_fee: v.flat_fee,
+        active: v.active ? 0 : 1,
       });
       show(v.active ? 'Fahrzeug deaktiviert' : 'Fahrzeug aktiviert');
       load();
@@ -115,6 +140,12 @@ export default function Vehicles() {
                   </div>
                   <p className="text-sm text-gray-500 font-mono">{v.license_plate}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{v.type}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {Number(v.price_per_km || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR/km
+                    {v.flat_fee != null && Number(v.flat_fee) > 0
+                      ? ` + ${Number(v.flat_fee).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR Pauschale`
+                      : ''}
+                  </p>
                   {v.description && <p className="text-xs text-gray-500 mt-1">{v.description}</p>}
                 </div>
                 {isAdmin && (
@@ -173,6 +204,29 @@ export default function Vehicles() {
               <select value={form.type} onChange={set('type')} className="input">
                 {VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
+            </Field>
+            <Field label="Preis pro km (EUR)" required>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.price_per_km}
+                onChange={set('price_per_km')}
+                required
+                className="input"
+                placeholder="z. B. 0.35"
+              />
+            </Field>
+            <Field label="Pauschale pro Fahrt (EUR, optional)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.flat_fee}
+                onChange={set('flat_fee')}
+                className="input"
+                placeholder="z. B. 2.50"
+              />
             </Field>
             <Field label="Beschreibung">
               <textarea

@@ -4,6 +4,20 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+function parsePricePerKm(value) {
+  if (value == null || value === '') return 0;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return Number(num.toFixed(4));
+}
+
+function parseFlatFee(value) {
+  if (value == null || value === '') return null;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return Number(num.toFixed(2));
+}
+
 router.get('/', authenticate, (req, res) => {
   const db = getDb();
   const vehicles = req.user.role === 'admin'
@@ -13,16 +27,32 @@ router.get('/', authenticate, (req, res) => {
 });
 
 router.post('/', authenticate, requireAdmin, (req, res) => {
-  const { name, license_plate, type, description } = req.body;
+  const { name, license_plate, type, description, price_per_km, flat_fee } = req.body;
   if (!name || !license_plate) {
     return res.status(400).json({ error: 'Name und Kennzeichen sind erforderlich' });
+  }
+
+  const parsedPricePerKm = parsePricePerKm(price_per_km);
+  const parsedFlatFee = parseFlatFee(flat_fee);
+  if (parsedPricePerKm == null) {
+    return res.status(400).json({ error: 'Preis pro km ist ungültig' });
+  }
+  if (flat_fee != null && flat_fee !== '' && parsedFlatFee == null) {
+    return res.status(400).json({ error: 'Pauschale ist ungültig' });
   }
 
   const db = getDb();
   try {
     const result = db.prepare(
-      'INSERT INTO vehicles (name, license_plate, type, description) VALUES (?, ?, ?, ?)'
-    ).run(name.trim(), license_plate.trim().toUpperCase(), type || 'PKW', description || '');
+      'INSERT INTO vehicles (name, license_plate, type, description, price_per_km, flat_fee) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(
+      name.trim(),
+      license_plate.trim().toUpperCase(),
+      type || 'PKW',
+      description || '',
+      parsedPricePerKm,
+      parsedFlatFee,
+    );
     const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(vehicle);
   } catch {
@@ -31,16 +61,34 @@ router.post('/', authenticate, requireAdmin, (req, res) => {
 });
 
 router.put('/:id', authenticate, requireAdmin, (req, res) => {
-  const { name, license_plate, type, description, active } = req.body;
+  const { name, license_plate, type, description, active, price_per_km, flat_fee } = req.body;
   if (!name || !license_plate) {
     return res.status(400).json({ error: 'Name und Kennzeichen sind erforderlich' });
+  }
+
+  const parsedPricePerKm = parsePricePerKm(price_per_km);
+  const parsedFlatFee = parseFlatFee(flat_fee);
+  if (parsedPricePerKm == null) {
+    return res.status(400).json({ error: 'Preis pro km ist ungültig' });
+  }
+  if (flat_fee != null && flat_fee !== '' && parsedFlatFee == null) {
+    return res.status(400).json({ error: 'Pauschale ist ungültig' });
   }
 
   const db = getDb();
   try {
     db.prepare(
-      'UPDATE vehicles SET name=?, license_plate=?, type=?, description=?, active=? WHERE id=?'
-    ).run(name.trim(), license_plate.trim().toUpperCase(), type || 'PKW', description || '', active ?? 1, req.params.id);
+      'UPDATE vehicles SET name=?, license_plate=?, type=?, description=?, price_per_km=?, flat_fee=?, active=? WHERE id=?'
+    ).run(
+      name.trim(),
+      license_plate.trim().toUpperCase(),
+      type || 'PKW',
+      description || '',
+      parsedPricePerKm,
+      parsedFlatFee,
+      active ?? 1,
+      req.params.id,
+    );
     const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
     res.json(vehicle);
   } catch {
