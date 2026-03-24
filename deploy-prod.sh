@@ -58,23 +58,33 @@ fi
 
 echo "Deploye Commit: $(git rev-parse --short HEAD)"
 
-echo "2) Backend installieren"
+echo "2) Sicherheitspruefung: backend/.env vorhanden?"
+if [ ! -f "backend/.env" ]; then
+  echo "FEHLER: backend/.env fehlt auf diesem Server."
+  echo "Bitte einmalig anlegen:"
+  echo "  SECRET=\$(node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\")"
+  echo "  echo \"JWT_SECRET=\$SECRET\" > /home/deploy/FaBu/backend/.env"
+  echo "  chmod 600 /home/deploy/FaBu/backend/.env"
+  exit 1
+fi
+
+echo "4) Backend installieren"
 cd backend
 npm install --production
 
-echo "3) Frontend installieren und bauen"
+echo "5) Frontend installieren und bauen"
 cd ../frontend
 npm install
 npm run build
 
-echo "4) Frontend Deploy nach /var/www/html/fabu"
+echo "6) Frontend Deploy nach /var/www/html/fabu"
 sudo rm -rf /var/www/html/fabu
 sudo mkdir -p /var/www/html/fabu
 sudo cp -r dist/* /var/www/html/fabu/
 sudo chown -R www-data:www-data /var/www/html/fabu
 sudo chmod -R 755 /var/www/html/fabu
 
-echo "5) Backend mit pm2 neu starten"
+echo "7) Backend mit pm2 neu starten"
 cd ../backend
 if pm2 status fabu-backend | grep -q "online"; then
   pm2 restart fabu-backend
@@ -83,7 +93,7 @@ else
 fi
 pm2 save
 
-echo "6) Nginx-Konfiguration prüfen und reload"
+echo "8) Nginx-Konfiguration prüfen und reload"
 sudo nginx -t
 sudo systemctl reload nginx
 
