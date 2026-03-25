@@ -20,6 +20,12 @@ npm install
 cat <<'EOF'
 
 ✅ Installation fertig.
+
+Konfiguration:
+  cp backend/.env.example backend/.env
+  # JWT_SECRET und optional DB_CLIENT/DATABASE_URL anpassen.
+  # Für PostgreSQL: ./setup-postgres.sh
+
 Starte dann in zwei Terminals:
   Terminal A: cd backend && npm run dev
   Terminal B: cd frontend && npm run dev
