@@ -1,105 +1,64 @@
 import { Router } from 'express';
-import { getDb } from '../db/database.js';
+import { db } from '../db/client.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
-function parsePricePerKm(value) {
-  if (value == null || value === '') return 0;
-  const num = Number(value);
-  if (!Number.isFinite(num) || num < 0) return null;
-  return Number(num.toFixed(4));
-}
-
-function parseFlatFee(value) {
-  if (value == null || value === '') return null;
-  const num = Number(value);
-  if (!Number.isFinite(num) || num < 0) return null;
-  return Number(num.toFixed(2));
-}
-
-router.get('/', authenticate, (req, res) => {
-  const db = getDb();
-  const vehicles = req.user.role === 'admin'
-    ? db.prepare('SELECT * FROM vehicles ORDER BY active DESC, name').all()
-    : db.prepare('SELECT * FROM vehicles WHERE active = 1 ORDER BY name').all();
-  res.json(vehicles);
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const vehicles = req.user.role === 'admin'
+      ? await db.queryMany('SELECT * FROM vehicles ORDER BY active DESC, name', [])
+      : await db.queryMany('SELECT * FROM vehicles WHERE active = 1 ORDER BY name', []);
+    res.json(vehicles);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Laden der Fahrzeuge' });
+  }
 });
 
-router.post('/', authenticate, requireAdmin, (req, res) => {
-  const { name, license_plate, type, description, price_per_km, flat_fee } = req.body;
+router.post('/', authenticate, requireAdmin, async (req, res) => {
+  const { name, license_plate, type, description } = req.body;
   if (!name || !license_plate) {
     return res.status(400).json({ error: 'Name und Kennzeichen sind erforderlich' });
   }
-
-  const parsedPricePerKm = parsePricePerKm(price_per_km);
-  const parsedFlatFee = parseFlatFee(flat_fee);
-  if (parsedPricePerKm == null) {
-    return res.status(400).json({ error: 'Preis pro km ist ungültig' });
-  }
-  if (flat_fee != null && flat_fee !== '' && parsedFlatFee == null) {
-    return res.status(400).json({ error: 'Pauschale ist ungültig' });
-  }
-
-  const db = getDb();
   try {
-    const result = db.prepare(
-      'INSERT INTO vehicles (name, license_plate, type, description, price_per_km, flat_fee) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(
-      name.trim(),
-      license_plate.trim().toUpperCase(),
-      type || 'PKW',
-      description || '',
-      parsedPricePerKm,
-      parsedFlatFee,
+    const { lastInsertId, row } = await db.execute(
+      'INSERT INTO vehicles (name, license_plate, type, description) VALUES (?, ?, ?, ?) RETURNING id',
+      [name.trim(), license_plate.trim().toUpperCase(), type || 'PKW', description || '']
     );
-    const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(result.lastInsertRowid);
+    const id = row?.id ?? lastInsertId;
+    const vehicle = await db.queryOne('SELECT * FROM vehicles WHERE id = ?', [id]);
     res.status(201).json(vehicle);
   } catch {
     res.status(409).json({ error: 'Kennzeichen bereits vorhanden' });
   }
 });
 
-router.put('/:id', authenticate, requireAdmin, (req, res) => {
-  const { name, license_plate, type, description, active, price_per_km, flat_fee } = req.body;
+router.put('/:id', authenticate, requireAdmin, async (req, res) => {
+  const { name, license_plate, type, description, active } = req.body;
   if (!name || !license_plate) {
     return res.status(400).json({ error: 'Name und Kennzeichen sind erforderlich' });
   }
-
-  const parsedPricePerKm = parsePricePerKm(price_per_km);
-  const parsedFlatFee = parseFlatFee(flat_fee);
-  if (parsedPricePerKm == null) {
-    return res.status(400).json({ error: 'Preis pro km ist ungültig' });
-  }
-  if (flat_fee != null && flat_fee !== '' && parsedFlatFee == null) {
-    return res.status(400).json({ error: 'Pauschale ist ungültig' });
-  }
-
-  const db = getDb();
   try {
-    db.prepare(
-      'UPDATE vehicles SET name=?, license_plate=?, type=?, description=?, price_per_km=?, flat_fee=?, active=? WHERE id=?'
-    ).run(
-      name.trim(),
-      license_plate.trim().toUpperCase(),
-      type || 'PKW',
-      description || '',
-      parsedPricePerKm,
-      parsedFlatFee,
-      active ?? 1,
-      req.params.id,
+    await db.execute(
+      'UPDATE vehicles SET name=?, license_plate=?, type=?, description=?, active=? WHERE id=?',
+      [name.trim(), license_plate.trim().toUpperCase(), type || 'PKW', description || '', active ?? 1, req.params.id]
     );
-    const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
+    const vehicle = await db.queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
     res.json(vehicle);
   } catch {
     res.status(409).json({ error: 'Kennzeichen bereits vorhanden' });
   }
 });
 
-router.delete('/:id', authenticate, requireAdmin, (req, res) => {
-  const db = getDb();
-  db.prepare('UPDATE vehicles SET active = 0 WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    await db.execute('UPDATE vehicles SET active = 0 WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Deaktivieren des Fahrzeugs' });
+  }
 });
 
 export default router;
