@@ -18,6 +18,19 @@ import { mkdirSync } from 'fs';
 
 const IS_POSTGRES = process.env.DB_CLIENT === 'postgres';
 
+// ─── Postgres type normalization ─────────────────────────────────────────────
+// By default the pg driver converts DATE -> JS Date object (serializes to ISO string)
+// and BOOLEAN -> true/false. We override the parsers so the output matches SQLite's
+// behaviour: DATE stays as 'YYYY-MM-DD' string, TIME as 'HH:MM:SS' string,
+// BOOLEAN as integer 1/0. This keeps all frontend comparisons and formatDate()
+// working without any changes.
+pg.types.setTypeParser(16,   (v) => (v === 't' ? 1 : 0));  // BOOLEAN     → 0/1
+pg.types.setTypeParser(1082, (v) => v);                      // DATE        → 'YYYY-MM-DD'
+pg.types.setTypeParser(1083, (v) => v);                      // TIME        → 'HH:MM:SS'
+pg.types.setTypeParser(1266, (v) => v);                      // TIMETZ      → string
+pg.types.setTypeParser(1114, (v) => v);                      // TIMESTAMP   → string
+pg.types.setTypeParser(1184, (v) => v);                      // TIMESTAMPTZ → string
+
 // ─── Postgres ────────────────────────────────────────────────────────────────
 
 let pgPool = null;
