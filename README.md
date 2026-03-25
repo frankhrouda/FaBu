@@ -1,6 +1,6 @@
 # FaBu - Fahrzeugbuchungs-App
 
-Eine moderne Full-Stack-Anwendung fuer die Verwaltung von Fahrzeugreservierungen, entwickelt mit Node.js (Express + SQLite), React (Vite + Tailwind CSS) und React Native (Expo) fuer Mobile.
+Eine moderne Full-Stack-Anwendung fuer die Verwaltung von Fahrzeugreservierungen, entwickelt mit Node.js (Express + SQLite/PostgreSQL), React (Vite + Tailwind CSS) und React Native (Expo) fuer Mobile.
 
 ## 🚀 Schnellstart
 
@@ -71,6 +71,13 @@ cd /home/deploy/FaBu
 # Testen: https://fabu-online.de
 ```
 
+Wichtig bei der Umstellung von SQLite auf PostgreSQL in Produktion:
+- `backend/.env` auf dem Server muss `DB_CLIENT=postgres` und eine gueltige `DATABASE_URL` enthalten.
+- `deploy-prod.sh` erstellt vor der ersten Umstellung automatisch ein SQLite-Backup unter `backend/data/sqlite-backups/`.
+- Danach wird dieses Backup idempotent in PostgreSQL eingespielt.
+- Nach erfolgreicher Erstmigration wird eine Marker-Datei gesetzt, damit Folge-Deploys nicht erneut migrieren.
+- Fuer eine erzwungene Wiederholung: `FORCE_SQLITE_MIGRATION=1 ./deploy-prod.sh`
+
 ## 📋 Workflow: Lokale Entwicklung → Produktion
 
 ### 1. Lokale Änderungen
@@ -84,8 +91,10 @@ cd /home/deploy/FaBu
 
 ### 2. Produktions-Deployment
 1. SSH auf VPS: `ssh deploy@187.124.170.226`
-2. Deploy-Skript: `cd /home/deploy/FaBu && ./deploy-prod.sh`
-3. Testen: `https://fabu-online.de`
+2. PostgreSQL bereitstellen, falls noch nicht geschehen: `./setup-postgres.sh`
+3. In `backend/.env` setzen: `DB_CLIENT=postgres` und `DATABASE_URL=...`
+4. Deploy-Skript: `cd /home/deploy/FaBu && ./deploy-prod.sh`
+5. Testen: `https://fabu-online.de`
 
 ### 3. Wartung
 - Backend neu starten: `pm2 restart fabu-backend`
@@ -99,6 +108,7 @@ cd /home/deploy/FaBu
 - `local-dev.sh`: Lokales Setup (Dependencies installieren)
 - `deploy-prod.sh`: Vollständiges Prod-Deployment (Pull, Build, Deploy, Restart)
 - `install-server.sh`: Server-Setup (Node.js, SQLite, Nginx, etc.)
+- `setup-postgres.sh`: PostgreSQL einrichten (lokal oder auf dem Server)
 - `update-app.sh`: Einfaches Update (veraltet, verwende `deploy-prod.sh`)
 
 ### Neue Features
@@ -127,9 +137,11 @@ ssh deploy@187.124.170.226 'pm2 logs fabu-backend --lines 10 && sudo tail -n 10 
 FaBu/
 ├── backend/          # Node.js Express API
 │   ├── src/
-│   │   ├── db/       # SQLite Datenbank
+│   │   ├── db/       # Datenbankanbindung fuer SQLite/PostgreSQL
 │   │   ├── routes/   # API-Routen
 │   │   └── index.js  # Server-Start
+│   ├── data/         # SQLite-Datei und Backups fuer Migrationen
+│   └── scripts/      # Datenbank-Migrationsskripte
 │   └── package.json
 ├── frontend/         # React Vite App
 │   ├── src/
@@ -185,6 +197,24 @@ JWT_SECRET="dev-strong-secret" npm run dev
 
 #### Produktion (Beispiel)
 Setze `JWT_SECRET` in der Prozessumgebung (z.B. PM2 Ecosystem, Systemd, CI/CD Secret Store).
+
+Wenn Produktion auf PostgreSQL laufen soll, zusaetzlich in `backend/.env` setzen:
+```bash
+DB_CLIENT=postgres
+DATABASE_URL=postgresql://USER:PASS@localhost:5432/fabu
+```
+
+Bestehende SQLite-Daten einmalig uebernehmen:
+```bash
+cd backend
+npm run migrate:sqlite-to-postgres
+```
+
+Optional kann eine andere SQLite-Quelle angegeben werden:
+```bash
+cd backend
+SQLITE_DB_PATH=/pfad/zur/fabu-backup.db npm run migrate:sqlite-to-postgres
+```
 
 Zusätzlich sind folgende Schutzmechanismen aktiv:
 - `helmet` für Security-Header

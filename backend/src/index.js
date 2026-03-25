@@ -2,13 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { getDb } from './db/database.js';
+import { initDb } from './db/client.js';
 import authRoutes from './routes/auth.js';
 import vehicleRoutes from './routes/vehicles.js';
 import reservationRoutes from './routes/reservations.js';
 import userRoutes from './routes/users.js';
 
-getDb(); // Initialize DB on startup
+await initDb(); // Initialize DB on startup
 
 const app = express();
 const PORT = process.env.PORT || 3001;

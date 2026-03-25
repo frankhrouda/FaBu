@@ -8,7 +8,7 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const vehicles = req.user.role === 'admin'
       ? await db.queryMany('SELECT * FROM vehicles ORDER BY active DESC, name', [])
-      : await db.queryMany('SELECT * FROM vehicles WHERE active = 1 ORDER BY name', []);
+      : await db.queryMany('SELECT * FROM vehicles WHERE active = TRUE ORDER BY name', []);
     res.json(vehicles);
   } catch (err) {
     console.error(err);
@@ -40,9 +40,10 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Name und Kennzeichen sind erforderlich' });
   }
   try {
+    const normalizedActive = active == null ? true : Boolean(active);
     await db.execute(
       'UPDATE vehicles SET name=?, license_plate=?, type=?, description=?, active=? WHERE id=?',
-      [name.trim(), license_plate.trim().toUpperCase(), type || 'PKW', description || '', active ?? 1, req.params.id]
+      [name.trim(), license_plate.trim().toUpperCase(), type || 'PKW', description || '', normalizedActive, req.params.id]
     );
     const vehicle = await db.queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
     res.json(vehicle);
@@ -53,7 +54,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
 
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    await db.execute('UPDATE vehicles SET active = 0 WHERE id = ?', [req.params.id]);
+    await db.execute('UPDATE vehicles SET active = FALSE WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

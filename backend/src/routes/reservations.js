@@ -68,7 +68,7 @@ router.post('/', authenticate, async (req, res) => {
   }
 
   try {
-    const vehicle = await db.queryOne('SELECT id FROM vehicles WHERE id = ? AND active = 1', [vehicle_id]);
+    const vehicle = await db.queryOne('SELECT id FROM vehicles WHERE id = ? AND active = TRUE', [vehicle_id]);
     if (!vehicle) return res.status(404).json({ error: 'Fahrzeug nicht gefunden' });
 
     const conflict = await db.queryOne(`

@@ -106,6 +106,8 @@ const SQLITE_SCHEMA = `
     license_plate TEXT UNIQUE NOT NULL,
     type TEXT NOT NULL DEFAULT 'PKW',
     description TEXT DEFAULT '',
+    price_per_km REAL NOT NULL DEFAULT 0,
+    flat_fee REAL,
     active INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -115,6 +117,7 @@ const SQLITE_SCHEMA = `
     user_id INTEGER NOT NULL,
     vehicle_id INTEGER NOT NULL,
     date TEXT NOT NULL,
+    date_to TEXT NOT NULL,
     time_from TEXT NOT NULL,
     time_to TEXT NOT NULL,
     reason TEXT NOT NULL,
@@ -143,6 +146,8 @@ const PG_SCHEMA = `
     license_plate TEXT UNIQUE NOT NULL,
     type TEXT NOT NULL DEFAULT 'PKW',
     description TEXT DEFAULT '',
+    price_per_km DOUBLE PRECISION NOT NULL DEFAULT 0,
+    flat_fee DOUBLE PRECISION,
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
@@ -152,6 +157,7 @@ const PG_SCHEMA = `
     user_id INTEGER NOT NULL REFERENCES users(id),
     vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
     date DATE NOT NULL,
+    date_to DATE NOT NULL,
     time_from TIME NOT NULL,
     time_to TIME NOT NULL,
     reason TEXT NOT NULL,
@@ -165,12 +171,42 @@ const PG_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_res_user ON reservations(user_id);
 `;
 
+async function ensurePgMigrations() {
+  await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS price_per_km DOUBLE PRECISION NOT NULL DEFAULT 0');
+  await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS flat_fee DOUBLE PRECISION');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS date_to DATE');
+  await getPool().query('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
+}
+
+function ensureSqliteMigrations() {
+  const vehicleColumns = getSqlite().prepare("PRAGMA table_info(vehicles)").all();
+  const hasPricePerKm = vehicleColumns.some((col) => col.name === 'price_per_km');
+  const hasFlatFee = vehicleColumns.some((col) => col.name === 'flat_fee');
+  if (!hasPricePerKm) {
+    getSqlite().exec('ALTER TABLE vehicles ADD COLUMN price_per_km REAL NOT NULL DEFAULT 0');
+  }
+  if (!hasFlatFee) {
+    getSqlite().exec('ALTER TABLE vehicles ADD COLUMN flat_fee REAL');
+  }
+
+  const columns = getSqlite().prepare("PRAGMA table_info(reservations)").all();
+  const hasDateTo = columns.some((col) => col.name === 'date_to');
+  if (!hasDateTo) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN date_to TEXT');
+    getSqlite().exec('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
+  } else {
+    getSqlite().exec('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
+  }
+}
+
 export async function initDb() {
   if (IS_POSTGRES) {
     await getPool().query(PG_SCHEMA);
+    await ensurePgMigrations();
     console.log('🐘 PostgreSQL verbunden und Schema bereit.');
   } else {
     getSqlite().exec(SQLITE_SCHEMA);
+    ensureSqliteMigrations();
     console.log('🗄️  SQLite verbunden und Schema bereit.');
   }
 }

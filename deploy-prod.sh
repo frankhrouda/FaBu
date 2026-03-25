@@ -68,6 +68,15 @@ if [ ! -f "backend/.env" ]; then
   exit 1
 fi
 
+set -a
+. backend/.env
+set +a
+
+if [ "${DB_CLIENT:-sqlite}" = "postgres" ] && [ -z "${DATABASE_URL:-}" ]; then
+  echo "FEHLER: DB_CLIENT=postgres gesetzt, aber DATABASE_URL fehlt in backend/.env."
+  exit 1
+fi
+
 echo "4) Backend installieren"
 cd backend
 npm install --production
@@ -84,9 +93,40 @@ sudo cp -r dist/* /var/www/html/fabu/
 sudo chown -R www-data:www-data /var/www/html/fabu
 sudo chmod -R 755 /var/www/html/fabu
 
+SQLITE_DB="/home/deploy/FaBu/backend/data/fabu.db"
+SQLITE_BACKUP_DIR="/home/deploy/FaBu/backend/data/sqlite-backups"
+SQLITE_MIGRATION_MARKER="/home/deploy/FaBu/backend/data/.sqlite_to_postgres_migrated"
+
+if [ "${DB_CLIENT:-sqlite}" = "postgres" ] && [ -f "$SQLITE_DB" ]; then
+  if [ "${FORCE_SQLITE_MIGRATION:-0}" = "1" ] || [ ! -f "$SQLITE_MIGRATION_MARKER" ]; then
+    echo "6b) SQLite sichern und nach PostgreSQL migrieren"
+
+    if pm2 describe fabu-backend >/dev/null 2>&1; then
+      pm2 stop fabu-backend || true
+    fi
+
+    mkdir -p "$SQLITE_BACKUP_DIR"
+    BACKUP_BASENAME="fabu-$(date +%Y%m%d-%H%M%S).db"
+    BACKUP_PATH="$SQLITE_BACKUP_DIR/$BACKUP_BASENAME"
+
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+      echo "FEHLER: sqlite3 ist auf dem Server nicht installiert. Backup nicht moeglich."
+      exit 1
+    fi
+
+    sqlite3 "$SQLITE_DB" ".backup '$BACKUP_PATH'"
+    chmod 600 "$BACKUP_PATH"
+
+    SQLITE_DB_PATH="$BACKUP_PATH" npm run migrate:sqlite-to-postgres
+    touch "$SQLITE_MIGRATION_MARKER"
+  else
+    echo "6b) SQLite-Migration bereits abgeschlossen, ueberspringe Import"
+  fi
+fi
+
 echo "7) Backend mit pm2 neu starten"
 cd ../backend
-if pm2 status fabu-backend | grep -q "online"; then
+if pm2 describe fabu-backend >/dev/null 2>&1; then
   pm2 restart fabu-backend
 else
   pm2 start src/index.js --name fabu-backend
