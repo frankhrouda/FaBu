@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, MapPin, Clock, CheckCircle2, XCircle, Car, Gauge } from 'lucide-react';
+import { Plus, MapPin, Clock, CheckCircle2, XCircle, Car, Gauge, TriangleAlert } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
@@ -190,9 +190,10 @@ export default function Reservations() {
 
 function ReservationCard({ reservation: r, showUser, onComplete, onCancel }) {
   const isPast = (r.date_to || r.date) < new Date().toISOString().slice(0, 10);
+  const needsAction = isPast && r.status !== 'completed' && r.status !== 'cancelled';
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className={`bg-white rounded-xl border shadow-sm overflow-hidden ${needsAction ? 'border-amber-300 ring-2 ring-amber-200' : 'border-gray-100'}`}>
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -214,6 +215,12 @@ function ReservationCard({ reservation: r, showUser, onComplete, onCancel }) {
         </div>
 
         <div className="mt-3 space-y-1.5">
+          {needsAction && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+              <TriangleAlert className="w-3.5 h-3.5 shrink-0" />
+              <span>Vergangene Fahrt: Bitte abschließen oder stornieren.</span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Clock className="w-3.5 h-3.5 shrink-0 text-gray-400" />
             <span className="truncate">Grund: {r.reason}</span>

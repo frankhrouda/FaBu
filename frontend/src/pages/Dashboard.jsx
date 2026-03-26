@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarPlus, Car, CalendarCheck, Clock, MapPin, Plus, CheckCircle2, XCircle, Gauge } from 'lucide-react';
+import { CalendarPlus, Car, CalendarCheck, Clock, MapPin, Plus, CheckCircle2, XCircle, Gauge, TriangleAlert } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
@@ -55,6 +55,9 @@ export default function Dashboard() {
   };
 
   const today = new Date().toISOString().slice(0, 10);
+  const overdue = reservations
+    .filter((r) => (r.date_to || r.date) < today)
+    .filter((r) => r.status !== 'completed' && r.status !== 'cancelled');
   const upcoming = reservations
     .filter((r) => r.status === 'reserved' && (r.date_to || r.date) >= today)
     .slice(0, 3);
@@ -86,6 +89,44 @@ export default function Dashboard() {
           <StatCard icon={<Clock className="w-5 h-5 text-emerald-600" />} label="Abgeschl." value={stats.completed} bg="bg-emerald-50" />
           <StatCard icon={<Car className="w-5 h-5 text-amber-600" />} label="Fahrzeuge" value={stats.activeVehicles} bg="bg-amber-50" />
         </div>
+      )}
+
+      {/* Overdue warning */}
+      {!loading && overdue.length > 0 && (
+        <section className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <TriangleAlert className="w-6 h-6 text-amber-700 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-bold text-amber-900">
+                {overdue.length} Fahrt{overdue.length === 1 ? '' : 'en'} sind überfällig
+              </h2>
+              <p className="text-sm text-amber-800 mt-1">
+                Diese Fahrten liegen in der Vergangenheit und sind weder abgeschlossen noch storniert. Bitte jetzt abschließen oder stornieren.
+              </p>
+              <div className="mt-3 space-y-2">
+                {overdue.slice(0, 3).map((r) => (
+                  <div key={r.id} className="bg-white/70 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-amber-950 truncate">{r.vehicle_name}</p>
+                      <p className="text-xs text-amber-800">
+                        {formatDateRange(r.date, r.date_to)} · {r.time_from} - {r.time_to}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setCompleteForm({ km_driven: '', destination: '' }); setCompleteModal(r); }}
+                      className="shrink-0 bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-md hover:bg-amber-800 transition-colors"
+                    >
+                      Abschließen
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Link to="/reservations" className="inline-flex mt-3 text-sm font-semibold text-amber-900 underline underline-offset-2">
+                Alle überfälligen Fahrten anzeigen
+              </Link>
+            </div>
+          </div>
+        </section>
       )}
 
       {/* Upcoming */}
