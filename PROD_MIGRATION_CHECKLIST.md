@@ -2,7 +2,7 @@
 
 ## Status
 - ✅ Backup erstellt: `fabu-20260325-151604.db` (28K)
-- ❌ Migrationsmarker fehlt → Migration noch nicht durchgeführt
+- ✅ Migration in Produktion abgeschlossen
 
 ## Diagnose auf dem Server
 
@@ -132,10 +132,8 @@ Die Migration hätte während des Deploys automatisch laufen sollen (siehe [depl
 
 ## Nächster Schritt
 
-Gib auf dem Server folgendes Kommando aus und teile mir die Ausgabe:
+Migration ist abgeschlossen. Als Follow-up sind sinnvoll:
 
-```bash
-cd ~/FaBu && bash -x backend/.env 2>&1 | head -20 && echo "---" && psql "$DATABASE_URL" -c "SELECT version();" 2>&1
-```
-
-Dann kann ich dir die genaue Fehlerbehebung geben.
+1. Monitoring prüfen (Backend-Logs, DB-Fehler, API-Fehlerquote) für die nächsten 24h.
+2. Kurzen Smoke-Test im Frontend und in der mobilen App durchführen.
+3. Alte SQLite-Datei nur als Backup behalten und nicht mehr produktiv verwenden.
