@@ -5,13 +5,82 @@ import '../styles/global.css';
 
 <BaseLayout title="Datenschutz | FaBu" description="Datenschutzhinweise der FaBu Landing-Page.">
   <main class="mx-auto max-w-3xl px-6 py-16">
-    <a href="/" class="text-sm font-bold text-pine hover:underline">Zuruck zur Startseite</a>
-    <h1 class="mt-4 font-display text-4xl font-bold">Datenschutz</h1>
-    <div class="mt-8 rounded-2xl border border-ink/10 bg-white/80 p-6 shadow-card">
-      <p class="text-sm text-ink/80">
-        Bitte hinterlege hier eure DSGVO-konforme Datenschutzerklarung inkl. Verantwortlichem,
-        Verarbeitungszwecken, Rechtsgrundlagen und Betroffenenrechten.
-      </p>
+    <a href="/" class="text-sm font-bold text-pine hover:underline">← Zurück zur Startseite</a>
+    <h1 class="mt-4 font-display text-4xl font-bold">Datenschutzerklärung</h1>
+    
+    <div class="mt-8 space-y-6 text-sm text-ink/80 leading-relaxed">
+      {/* Verantwortung */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Verantwortungträgerin</h2>
+        <p>Verantwortliche im Sinne der Datenschutz-Grundverordnung (DSGVO) und anderer datenschutzrechtlicher Bestimmungen ist:<br/><br/>
+        [FIRMENNNAME]<br/>
+        [STRAßE UND HAUSNUMMER]<br/>
+        [POSTLEITZAHL] [ORT]<br/>
+        E-Mail: <a href="mailto:[E-MAIL-ADRESSE]" class="text-pine hover:underline">[E-MAIL-ADRESSE]</a></p>
+      </section>
+
+      {/* Umfang */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Umfang der Datenverarbeitung</h2>
+        <p>Wir verarbeiten personenbezogene Daten unserer Nutzer grundsätzlich nur, soweit dies zur Bereitstellung einer funktionsfähigen Website sowie unserer Inhalte und Leistungen erforderlich ist. Die Verarbeitung personenbezogener Daten unserer Nutzer erfolgt regelmäßig nur nach Einwilligung des Nutzers. Eine Ausnahme gilt in solchen Fällen, in denen eine vorherige Einholung einer Einwilligung aus tatsächlichen Gründen nicht möglich ist und die Verarbeitung der Daten durch gesetzliche Vorschriften gestattet ist.</p>
+      </section>
+
+      {/* Rechtsgrundlage */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Rechtsgrundlagen</h2>
+        <p>Die Verarbeitung Ihrer personenbezogenen Daten basiert auf einer der folgenden Rechtsgrundlagen nach Art. 6 DSGVO:</p>
+        <ul class="list-disc list-inside mt-2 space-y-1">
+          <li>Ihre Einwilligung (Art. 6 Abs. 1 lit. a) DSGVO)</li>
+          <li>Erforderlichkeit für die Erfüllung eines Vertrags (Art. 6 Abs. 1 lit. b) DSGVO)</li>
+          <li>Erforderlichkeit für die Erfüllung einer rechtlichen Verpflichtung (Art. 6 Abs. 1 lit. c) DSGVO)</li>
+          <li>Berechtigte Interessen unseres Unternehmens (Art. 6 Abs. 1 lit. f) DSGVO)</li>
+        </ul>
+      </section>
+
+      {/* Cookies */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Cookies</h2>
+        <p>[BESCHREIBUNG WELCHE COOKIES VERWENDET WERDEN UND WARUM - Z.B. "Unsere Website verwendet derzeit keine Cookies, die personenbezogene Daten speichern."]</p>
+      </section>
+
+      {/* Weitergabe */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Weitergabe von Daten</h2>
+        <p>Eine Übermittlung Ihrer Daten an Dritte findet nicht statt, es sei denn, wir sind hierzu gesetzlich verpflichtet oder Sie haben ausdrücklich eingewilligt.<br/><br/>
+        Auftragsverarbeiter, die in unserem Auftrag personenbezogene Daten verarbeiten, sind:</p>
+        <ul class="list-disc list-inside mt-2 space-y-1">
+          <li>[HOSTING-PROVIDER, Z.B. HOSTINGER]</li>
+          <li>[WEITERE DIENSTLEISTER]</li>
+        </ul>
+      </section>
+
+      {/* Speicherdauer */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Speicherdauer</h2>
+        <p>Ihre Daten werden für die Dauer der Geschäftsbeziehung und darüber hinaus entsprechend der geltenden Aufbewahrungspflichten gespeichert.</p>
+      </section>
+
+      {/* Betroffenenrechte */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Rechte der betroffenen Person</h2>
+        <p>Sie haben das Recht:</p>
+        <ul class="list-disc list-inside mt-2 space-y-1">
+          <li>Auskunft über Ihre gespeicherten Daten zu erhalten (Art. 15 DSGVO)</li>
+          <li>Unrichtige Daten berichtigen zu lassen (Art. 16 DSGVO)</li>
+          <li>Die Löschung Ihrer Daten zu verlangen (Art. 17 DSGVO)</li>
+          <li>Die Einschränkung der Verarbeitung zu verlangen (Art. 18 DSGVO)</li>
+          <li>Ihre Daten mitgeteilt zu bekommen und diese zu übertragen (Art. 20 DSGVO)</li>
+          <li>Widerspruch gegen die Verarbeitung einzulegen (Art. 21 DSGVO)</li>
+          <li>Eine Beschwerde bei der zuständigen Datenschutzbehörde einzureichen</li>
+        </ul>
+      </section>
+
+      {/* Kontakt */}
+      <section>
+        <h2 class="font-display text-lg font-bold text-ink mb-2">Kontakt zum Datenschutz</h2>
+        <p>Für Datenschutzanfragen erreichen Sie uns unter:<br/><br/>
+        E-Mail: <a href="mailto:[E-MAIL-ADRESSE]" class="text-pine hover:underline">[E-MAIL-ADRESSE]</a></p>
+      </section>
     </div>
   </main>
 </BaseLayout>
