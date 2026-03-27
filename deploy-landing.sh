@@ -10,7 +10,7 @@ echo "=== Deploy FaBu Landing ==="
 cd /home/deploy/FaBu/landing
 
 echo "1) Dependencies installieren"
-npm ci
+npm install
 
 echo "2) Build erstellen"
 npm run build
