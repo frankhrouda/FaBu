@@ -32,6 +32,13 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
+Landing-Hinweis:
+```nginx
+location / {
+  try_files $uri $uri/ $uri.html =404;
+}
+```
+
 - [ ] Nginx-Configs aktiviert
 - [ ] `sudo nginx -t` ohne Fehler
 

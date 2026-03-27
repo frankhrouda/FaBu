@@ -14,6 +14,8 @@ app.fabu-online.de   A   187.124.170.226
 
 ## Server-Setup
 
+Wichtig fuer die Landing-Page: Sie ist eine statische Astro-Site und keine Single-Page-App. Deshalb darf die Nginx-Config nicht pauschal auf `/index.html` zurueckfallen, sonst werden Seiten wie `/impressum` oder `/datenschutz` wieder auf die Startseite geleitet.
+
 ### 1. Verzeichnisse anlegen
 ```bash
 sudo mkdir -p /var/www/html/fabu-landing
@@ -30,6 +32,13 @@ sudo chmod -R 755 /var/www/html/fabu
 ```bash
 sudo cp /home/deploy/FaBu/nginx-config-landing-example /etc/nginx/sites-available/fabu-landing
 sudo ln -s /etc/nginx/sites-available/fabu-landing /etc/nginx/sites-enabled/fabu-landing
+```
+
+Die relevante Landing-Regel sollte so aussehen:
+```nginx
+location / {
+  try_files $uri $uri/ $uri.html =404;
+}
 ```
 
 #### App aktivieren
@@ -105,6 +114,13 @@ curl https://app.fabu-online.de/api/health  # (wenn Endpoint vorhanden)
 **Nginx testet die Config vorher:**
 ```bash
 sudo nginx -t
+```
+
+**Landing-Seiten wie `/impressum` oder `/datenschutz` landen auf der Startseite:**
+```bash
+sudo sed -i 's/try_files $uri $uri\/ \/index.html;/try_files $uri $uri\/ $uri.html =404;/' /etc/nginx/sites-available/fabu-landing
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 **Nginx Logs prüfen:**
