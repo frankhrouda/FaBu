@@ -61,12 +61,22 @@ adb devices
 
 Wenn ein Emulator laeuft, sollte dort z.B. `emulator-5554   device` erscheinen.
 
-### Produktions-Deployment
+### Produktions-Deployment (App)
 ```bash
 # Auf dem VPS (als deploy-User):
 ssh deploy@187.124.170.226
 cd /home/deploy/FaBu
 ./deploy-prod.sh
+
+# Testen: https://app.fabu-online.de
+```
+
+### Landing-Page Deployment (separat)
+```bash
+# Auf dem VPS (als deploy-User):
+ssh deploy@187.124.170.226
+cd /home/deploy/FaBu
+./deploy-landing.sh
 
 # Testen: https://fabu-online.de
 ```

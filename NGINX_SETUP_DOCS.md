@@ -1,0 +1,125 @@
+# Nginx Setup: Landing + App auf separaten Subdomains
+
+## Übersicht
+- **Landing-Page**: `fabu-online.de` & `www.fabu-online.de` → `/var/www/html/fabu-landing`
+- **App**: `app.fabu-online.de` → `/var/www/html/fabu` (Backend auf Port 3001)
+
+## DNS Records
+Folgende A-Einträge müssen auf deine VPS-IP zeigen:
+```
+fabu-online.de       A   187.124.170.226
+www.fabu-online.de   A   187.124.170.226
+app.fabu-online.de   A   187.124.170.226
+```
+
+## Server-Setup
+
+### 1. Verzeichnisse anlegen
+```bash
+sudo mkdir -p /var/www/html/fabu-landing
+sudo mkdir -p /var/www/html/fabu
+sudo chown -R deploy:www-data /var/www/html/fabu-landing
+sudo chown -R deploy:www-data /var/www/html/fabu
+sudo chmod -R 755 /var/www/html/fabu-landing
+sudo chmod -R 755 /var/www/html/fabu
+```
+
+### 2. Nginx-Configs konfigurieren
+
+#### Landing-Page aktivieren
+```bash
+sudo cp /home/deploy/FaBu/nginx-config-landing-example /etc/nginx/sites-available/fabu-landing
+sudo ln -s /etc/nginx/sites-available/fabu-landing /etc/nginx/sites-enabled/fabu-landing
+```
+
+#### App aktivieren
+```bash
+sudo cp /home/deploy/FaBu/nginx-config-app-example /etc/nginx/sites-available/fabu-app
+sudo ln -s /etc/nginx/sites-available/fabu-app /etc/nginx/sites-enabled/fabu-app
+```
+
+#### Test & Reload
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 3. HTTPS mit Certbot aktivieren
+
+```bash
+sudo certbot --nginx \
+  -d fabu-online.de \
+  -d www.fabu-online.de \
+  -d app.fabu-online.de
+```
+
+Certbot wird:
+- Zertifikate für alle drei Domains ausstellen
+- Nginx-Configs automatisch anpassen (HTTP → HTTPS Redirect)
+- Auto-Renewal konfigurieren
+
+### 4. Backend starten (falls noch nicht laufen)
+```bash
+cd /home/deploy/FaBu/backend
+pm2 start src/index.js --name fabu-backend
+pm2 save
+```
+
+### 5. Deployments
+
+**Landing deployen:**
+```bash
+cd /home/deploy/FaBu
+./deploy-landing.sh
+```
+
+**App deployen:**
+```bash
+cd /home/deploy/FaBu
+./deploy-prod.sh
+```
+
+## Nginx-Struktur nach Setup
+```
+/etc/nginx/sites-enabled/
+├── fabu-landing  → /etc/nginx/sites-available/fabu-landing
+└── fabu-app      → /etc/nginx/sites-available/fabu-app
+```
+
+## Testing
+
+```bash
+# Landing erreichbar?
+curl -I https://fabu-online.de
+curl -I https://www.fabu-online.de
+
+# App erreichbar?
+curl -I https://app.fabu-online.de
+
+# Backend API erreichbar?
+curl https://app.fabu-online.de/api/health  # (wenn Endpoint vorhanden)
+```
+
+## Troubleshooting
+
+**Nginx testet die Config vorher:**
+```bash
+sudo nginx -t
+```
+
+**Nginx Logs prüfen:**
+```bash
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
+```
+
+**Backend Port 3001 blockt?**
+```bash
+sudo ufw allow 3001  # Nur lokal nötig, da Nginx Proxy ist
+```
+
+**Certbot Auto-Renewal prüfen:**
+```bash
+sudo systemctl status certbot.timer
+sudo certbot renew --dry-run
+```

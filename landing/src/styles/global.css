@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-warm: radial-gradient(circle at 20% 20%, #f5e8d5 0%, #f6f1e8 40%, #f1f7f5 100%);
+  --bg-mesh: radial-gradient(circle at 85% 30%, rgba(20, 93, 74, 0.16), transparent 38%),
+    radial-gradient(circle at 10% 80%, rgba(223, 166, 111, 0.2), transparent 30%);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-sand text-ink font-body antialiased;
+  background-image: var(--bg-mesh), var(--bg-warm);
+  background-attachment: fixed;
+}
+
+.glass {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: revealUp 600ms ease forwards;
+}
+
+.reveal-delay-1 {
+  animation-delay: 120ms;
+}
+
+.reveal-delay-2 {
+  animation-delay: 240ms;
+}
+
+.reveal-delay-3 {
+  animation-delay: 360ms;
+}
+
+@keyframes revealUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

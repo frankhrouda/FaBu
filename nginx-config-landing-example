@@ -1,0 +1,16 @@
+server {
+    listen 80;
+    server_name fabu-online.de www.fabu-online.de;
+
+    root /var/www/html/fabu-landing;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp)$ {
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+}

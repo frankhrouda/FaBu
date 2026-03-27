@@ -1,0 +1,145 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import '../styles/global.css';
+---
+
+<BaseLayout>
+  <header class="sticky top-0 z-20 border-b border-ink/10 glass">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <a href="#top" class="font-display text-lg font-bold tracking-tight">FaBu</a>
+      <nav class="hidden gap-6 text-sm font-semibold md:flex">
+        <a href="#features" class="hover:text-pine transition-colors">Features</a>
+        <a href="#benefits" class="hover:text-pine transition-colors">Vorteile</a>
+        <a href="#faq" class="hover:text-pine transition-colors">FAQ</a>
+      </nav>
+      <a
+        href="https://app.fabu-online.de/login"
+        class="rounded-full bg-pine px-4 py-2 text-sm font-bold text-white transition-transform hover:scale-[1.03]"
+      >
+        Zur App
+      </a>
+    </div>
+  </header>
+
+  <main id="top" class="mx-auto max-w-6xl px-6 pb-20 pt-12 md:pt-20">
+    <section class="grid items-center gap-10 md:grid-cols-[1.15fr_1fr]">
+      <div>
+        <p class="reveal inline-flex rounded-full border border-pine/20 bg-white/70 px-4 py-1 text-xs font-bold uppercase tracking-[0.2em] text-pine">
+          Digitales Fahrzeugmanagement
+        </p>
+        <h1 class="reveal reveal-delay-1 mt-5 font-display text-4xl font-bold leading-tight md:text-6xl">
+          Fahrzeugbuchung, die Teams wirklich Zeit spart.
+        </h1>
+        <p class="reveal reveal-delay-2 mt-6 max-w-xl text-lg text-ink/80">
+          FaBu organisiert Reservierungen, macht Verfugbarkeiten transparent und reduziert Abstimmungschaos
+          auf wenige Klicks.
+        </p>
+        <div class="reveal reveal-delay-3 mt-8 flex flex-wrap items-center gap-4">
+          <a
+            href="https://app.fabu-online.de/register"
+            class="rounded-full bg-ink px-6 py-3 text-sm font-extrabold text-sand shadow-card transition-transform hover:-translate-y-0.5"
+          >
+            Kostenlos starten
+          </a>
+          <a href="#features" class="rounded-full border border-ink/20 px-6 py-3 text-sm font-bold hover:border-pine hover:text-pine transition-colors">
+            Mehr erfahren
+          </a>
+        </div>
+      </div>
+
+      <div class="reveal reveal-delay-2 rounded-3xl border border-ink/10 bg-white/80 p-6 shadow-card">
+        <div class="rounded-2xl bg-gradient-to-br from-pine to-ink p-6 text-sand">
+          <p class="text-xs font-bold uppercase tracking-[0.18em] text-mist">Heute im Fuhrpark</p>
+          <ul class="mt-4 space-y-3 text-sm">
+            <li class="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
+              <span>VW ID.4</span><span class="font-bold">frei ab 14:30</span>
+            </li>
+            <li class="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
+              <span>Skoda Octavia</span><span class="font-bold">gebucht</span>
+            </li>
+            <li class="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
+              <span>Ford Transit</span><span class="font-bold">frei</span>
+            </li>
+          </ul>
+        </div>
+        <p class="mt-4 text-sm text-ink/70">
+          Live-Ubersicht mit klaren Reservierungsfenstern statt Telefonketten und Tabellenchaos.
+        </p>
+      </div>
+    </section>
+
+    <section id="features" class="mt-20">
+      <div class="mb-8 flex items-end justify-between gap-4">
+        <h2 class="font-display text-3xl font-bold md:text-4xl">Was FaBu anders macht</h2>
+        <span class="rounded-full border border-ink/15 bg-white/60 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-ink/70">
+          Schnell einsatzbereit
+        </span>
+      </div>
+
+      <div class="grid gap-5 md:grid-cols-3">
+        <article class="rounded-2xl border border-ink/10 bg-white/80 p-6 shadow-card">
+          <h3 class="font-display text-xl font-bold">Klare Verfugbarkeit</h3>
+          <p class="mt-3 text-sm text-ink/75">
+            Teams sehen sofort, welches Fahrzeug frei ist und wann es wieder verfugbar wird.
+          </p>
+        </article>
+        <article class="rounded-2xl border border-ink/10 bg-white/80 p-6 shadow-card">
+          <h3 class="font-display text-xl font-bold">Reservieren in Sekunden</h3>
+          <p class="mt-3 text-sm text-ink/75">
+            Buchungen mit wenigen Angaben erstellen, verwalten und transparent nachvollziehen.
+          </p>
+        </article>
+        <article class="rounded-2xl border border-ink/10 bg-white/80 p-6 shadow-card">
+          <h3 class="font-display text-xl font-bold">Admin-Kontrolle</h3>
+          <p class="mt-3 text-sm text-ink/75">
+            Rollen, Fahrzeuge und Kalender an einem Ort administrieren ohne Medienbruch.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="benefits" class="mt-20 rounded-3xl border border-ink/10 bg-white/75 p-8 shadow-card md:p-10">
+      <h2 class="font-display text-3xl font-bold">Vorteile fur deinen Betrieb</h2>
+      <div class="mt-8 grid gap-6 md:grid-cols-2">
+        <div>
+          <p class="text-4xl font-extrabold text-pine">-40%</p>
+          <p class="mt-2 text-sm text-ink/75">Weniger Abstimmungsaufwand bei Fahrzeuganfragen.</p>
+        </div>
+        <div>
+          <p class="text-4xl font-extrabold text-pine">100%</p>
+          <p class="mt-2 text-sm text-ink/75">Transparenz uber laufende und kommende Reservierungen.</p>
+        </div>
+      </div>
+      <a
+        href="https://app.fabu-online.de/login"
+        class="mt-8 inline-flex rounded-full bg-clay px-6 py-3 text-sm font-extrabold text-ink transition hover:brightness-95"
+      >
+        Live ansehen
+      </a>
+    </section>
+
+    <section id="faq" class="mt-20">
+      <h2 class="font-display text-3xl font-bold">FAQ</h2>
+      <div class="mt-6 space-y-4">
+        <details class="rounded-2xl border border-ink/10 bg-white/80 p-5">
+          <summary class="cursor-pointer font-bold">Ist FaBu nur fur grosse Fuhrparks geeignet?</summary>
+          <p class="mt-3 text-sm text-ink/75">Nein. FaBu funktioniert bereits mit kleinen Teams und wenigen Fahrzeugen sehr gut.</p>
+        </details>
+        <details class="rounded-2xl border border-ink/10 bg-white/80 p-5">
+          <summary class="cursor-pointer font-bold">Kann ich direkt starten?</summary>
+          <p class="mt-3 text-sm text-ink/75">Ja. Du kannst dich registrieren und sofort erste Fahrzeuge und Reservierungen anlegen.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-ink/10 bg-white/70">
+    <div class="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-8 text-sm text-ink/70 md:flex-row md:items-center md:justify-between">
+      <p>© {new Date().getFullYear()} FaBu</p>
+      <div class="flex gap-4">
+        <a href="/impressum" class="hover:text-pine">Impressum</a>
+        <a href="/datenschutz" class="hover:text-pine">Datenschutz</a>
+      </div>
+    </div>
+  </footer>
+</BaseLayout>
