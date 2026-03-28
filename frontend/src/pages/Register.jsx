@@ -18,8 +18,8 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      const { token, user } = await api.post('/auth/register', form);
-      login(token, user);
+      const { token, user, available_tenants } = await api.post('/auth/register', form);
+      login(token, user, available_tenants || []);
       navigate('/');
     } catch (err) {
       setError(err.message);

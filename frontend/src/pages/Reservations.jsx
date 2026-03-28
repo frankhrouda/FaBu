@@ -11,7 +11,7 @@ const FILTERS = ['Alle', 'Reserviert', 'Abgeschlossen', 'Storniert'];
 const filterMap = { 'Alle': null, 'Reserviert': 'reserved', 'Abgeschlossen': 'completed', 'Storniert': 'cancelled' };
 
 export default function Reservations() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toasts, show, dismiss } = useToast();
 
   const [reservations, setReservations] = useState([]);
@@ -66,7 +66,7 @@ export default function Reservations() {
 
       <div className="flex items-center justify-between pt-2">
         <h1 className="text-2xl font-bold text-gray-900">
-          {user?.role === 'admin' ? 'Alle Fahrten' : 'Meine Fahrten'}
+          {isAdmin ? 'Alle Fahrten' : 'Meine Fahrten'}
         </h1>
         <Link
           to="/reservations/new"
@@ -111,7 +111,7 @@ export default function Reservations() {
             <ReservationCard
               key={r.id}
               reservation={r}
-              showUser={user?.role === 'admin'}
+              showUser={isAdmin}
               onComplete={() => { setCompleteForm({ km_driven: '', destination: '' }); setCompleteModal(r); }}
               onCancel={() => handleCancel(r)}
             />

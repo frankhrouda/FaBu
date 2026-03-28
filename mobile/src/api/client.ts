@@ -74,6 +74,10 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
   },
+
+  switchTenant(token: string, tenantId: number) {
+    return request<AuthResponse>(`/auth/switch-tenant/${tenantId}`, { method: 'POST' }, token);
+  },
 };
 
 export const vehiclesApi = {

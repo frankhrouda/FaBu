@@ -4,6 +4,17 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+function requireTenantContext(req, res, { allowSuperAdminWithoutTenant = false } = {}) {
+  if (allowSuperAdminWithoutTenant && req.user?.super_admin) {
+    return false;
+  }
+  if (!req.tenantId) {
+    res.status(400).json({ error: 'Aktiver Mandant erforderlich' });
+    return true;
+  }
+  return false;
+}
+
 const WITH_DETAILS = `
   SELECT r.*, u.name as user_name, u.email as user_email,
          v.name as vehicle_name, v.license_plate
@@ -13,10 +24,14 @@ const WITH_DETAILS = `
 `;
 
 router.get('/', authenticate, async (req, res) => {
+  if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
   try {
-    const reservations = req.user.role === 'admin'
+    const isAdmin = req.user.role === 'admin' || req.user.super_admin || req.tenantRole === 'admin';
+    const reservations = req.user.super_admin && !req.tenantId
       ? await db.queryMany(`${WITH_DETAILS} ORDER BY r.date DESC, r.time_from DESC`, [])
-      : await db.queryMany(`${WITH_DETAILS} WHERE r.user_id = ? ORDER BY r.date DESC, r.time_from DESC`, [req.user.id]);
+      : isAdmin
+        ? await db.queryMany(`${WITH_DETAILS} WHERE v.tenant_id = ? ORDER BY r.date DESC, r.time_from DESC`, [req.tenantId])
+        : await db.queryMany(`${WITH_DETAILS} WHERE r.user_id = ? AND v.tenant_id = ? ORDER BY r.date DESC, r.time_from DESC`, [req.user.id, req.tenantId]);
     res.json(reservations);
   } catch (err) {
     console.error(err);
@@ -25,6 +40,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 router.get('/availability', authenticate, async (req, res) => {
+  if (requireTenantContext(req, res)) return;
   const { vehicle_id, date, date_to, time_from, time_to, exclude_id } = req.query;
   if (!vehicle_id || !date || !time_from || !time_to) {
     return res.status(400).json({ error: 'Parameter fehlen' });
@@ -32,12 +48,14 @@ router.get('/availability', authenticate, async (req, res) => {
 
   const endDate = date_to || date;
   let query = `
-    SELECT id FROM reservations
-    WHERE vehicle_id = ? AND status != 'cancelled'
+    SELECT r.id FROM reservations r
+    JOIN vehicles v ON v.id = r.vehicle_id
+    WHERE r.vehicle_id = ? AND r.status != 'cancelled'
+    AND v.tenant_id = ?
     AND (date || ' ' || time_from) < (? || ' ' || ?)
     AND (COALESCE(date_to, date) || ' ' || time_to) > (? || ' ' || ?)
   `;
-  const params = [vehicle_id, endDate, time_to, date, time_from];
+  const params = [vehicle_id, req.tenantId, endDate, time_to, date, time_from];
 
   if (exclude_id) {
     query += ' AND id != ?';
@@ -54,6 +72,7 @@ router.get('/availability', authenticate, async (req, res) => {
 });
 
 router.post('/', authenticate, async (req, res) => {
+  if (requireTenantContext(req, res)) return;
   const { vehicle_id, date, date_to, time_from, time_to, reason } = req.body;
   if (!vehicle_id || !date || !time_from || !time_to || !reason) {
     return res.status(400).json({ error: 'Alle Felder sind erforderlich' });
@@ -68,15 +87,17 @@ router.post('/', authenticate, async (req, res) => {
   }
 
   try {
-    const vehicle = await db.queryOne('SELECT id FROM vehicles WHERE id = ? AND active = TRUE', [vehicle_id]);
+    const vehicle = await db.queryOne('SELECT id FROM vehicles WHERE id = ? AND active = TRUE AND tenant_id = ?', [vehicle_id, req.tenantId]);
     if (!vehicle) return res.status(404).json({ error: 'Fahrzeug nicht gefunden' });
 
     const conflict = await db.queryOne(`
-      SELECT id FROM reservations
-      WHERE vehicle_id = ? AND status != 'cancelled'
+      SELECT r.id FROM reservations r
+      JOIN vehicles v ON v.id = r.vehicle_id
+      WHERE r.vehicle_id = ? AND r.status != 'cancelled'
+      AND v.tenant_id = ?
       AND (date || ' ' || time_from) < (? || ' ' || ?)
       AND (COALESCE(date_to, date) || ' ' || time_to) > (? || ' ' || ?)
-    `, [vehicle_id, endDate, time_to, date, time_from]);
+    `, [vehicle_id, req.tenantId, endDate, time_to, date, time_from]);
 
     if (conflict) {
       return res.status(409).json({ error: 'Fahrzeug ist in diesem Zeitraum bereits reserviert' });
@@ -97,6 +118,7 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 router.patch('/:id/complete', authenticate, async (req, res) => {
+  if (requireTenantContext(req, res)) return;
   const { km_driven, destination } = req.body;
   if (!km_driven || !destination) {
     return res.status(400).json({ error: 'Kilometer und Zielort sind erforderlich' });
@@ -106,10 +128,16 @@ router.patch('/:id/complete', authenticate, async (req, res) => {
   }
 
   try {
-    const reservation = await db.queryOne('SELECT * FROM reservations WHERE id = ?', [req.params.id]);
+    const reservation = await db.queryOne(
+      `SELECT r.*
+       FROM reservations r
+       JOIN vehicles v ON v.id = r.vehicle_id
+       WHERE r.id = ? AND v.tenant_id = ?`,
+      [req.params.id, req.tenantId]
+    );
     if (!reservation) return res.status(404).json({ error: 'Reservierung nicht gefunden' });
 
-    if (reservation.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (reservation.user_id !== req.user.id && req.user.role !== 'admin' && req.tenantRole !== 'admin' && !req.user.super_admin) {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     if (reservation.status !== 'reserved') {
@@ -130,11 +158,18 @@ router.patch('/:id/complete', authenticate, async (req, res) => {
 });
 
 router.patch('/:id/cancel', authenticate, async (req, res) => {
+  if (requireTenantContext(req, res)) return;
   try {
-    const reservation = await db.queryOne('SELECT * FROM reservations WHERE id = ?', [req.params.id]);
+    const reservation = await db.queryOne(
+      `SELECT r.*
+       FROM reservations r
+       JOIN vehicles v ON v.id = r.vehicle_id
+       WHERE r.id = ? AND v.tenant_id = ?`,
+      [req.params.id, req.tenantId]
+    );
     if (!reservation) return res.status(404).json({ error: 'Reservierung nicht gefunden' });
 
-    if (reservation.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (reservation.user_id !== req.user.id && req.user.role !== 'admin' && req.tenantRole !== 'admin' && !req.user.super_admin) {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     if (reservation.status !== 'reserved') {
@@ -150,10 +185,11 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
 });
 
 router.get('/vehicle/:vehicle_id', authenticate, async (req, res) => {
+  if (requireTenantContext(req, res)) return;
   try {
     const reservations = await db.queryMany(
-      `${WITH_DETAILS} WHERE r.vehicle_id = ? AND r.status != 'cancelled' ORDER BY r.date ASC, r.time_from ASC`,
-      [req.params.vehicle_id]
+      `${WITH_DETAILS} WHERE r.vehicle_id = ? AND v.tenant_id = ? AND r.status != 'cancelled' ORDER BY r.date ASC, r.time_from ASC`,
+      [req.params.vehicle_id, req.tenantId]
     );
     res.json(reservations);
   } catch (err) {

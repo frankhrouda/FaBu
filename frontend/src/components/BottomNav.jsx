@@ -10,8 +10,8 @@ const navItems = [
 ];
 
 export default function BottomNav() {
-  const { user } = useAuth();
-  const items = user?.role === 'admin'
+  const { isAdmin } = useAuth();
+  const items = isAdmin
     ? [...navItems, { to: '/admin', label: 'Admin', icon: ShieldCheck }]
     : navItems;
 

@@ -18,8 +18,7 @@ const emptyForm = {
 };
 
 export default function Vehicles() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const { isAdmin } = useAuth();
   const { toasts, show, dismiss } = useToast();
 
   const [vehicles, setVehicles] = useState([]);

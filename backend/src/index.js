@@ -4,8 +4,10 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { initDb } from './db/client.js';
 import authRoutes from './routes/auth.js';
+import adminTenantRoutes from './routes/adminTenants.js';
 import vehicleRoutes from './routes/vehicles.js';
 import reservationRoutes from './routes/reservations.js';
+import tenantRoutes from './routes/tenants.js';
 import userRoutes from './routes/users.js';
 
 await initDb(); // Initialize DB on startup
@@ -37,9 +39,12 @@ app.use(express.json());
 
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/register-with-invite', authLimiter);
 app.use('/api', apiLimiter);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminTenantRoutes);
+app.use('/api/tenants', tenantRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/users', userRoutes);

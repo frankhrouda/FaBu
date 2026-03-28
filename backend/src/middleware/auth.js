@@ -22,7 +22,7 @@ export async function authenticate(req, res, next) {
 
     // Always hydrate user from the active DB (prevents stale tokens across DB switches).
     const user = await db.queryOne(
-      'SELECT id, name, email, role FROM users WHERE id = ?',
+      'SELECT id, name, email, role, super_admin FROM users WHERE id = ?',
       [payload.id]
     );
 
@@ -30,7 +30,23 @@ export async function authenticate(req, res, next) {
       return res.status(401).json({ error: 'Benutzer für dieses Token nicht gefunden. Bitte neu anmelden.' });
     }
 
+    const requestedTenantId = payload.active_tenant_id ?? null;
+    let tenantRole = null;
+
+    if (requestedTenantId != null && !user.super_admin) {
+      const membership = await db.queryOne(
+        'SELECT role FROM tenant_members WHERE tenant_id = ? AND user_id = ?',
+        [requestedTenantId, user.id]
+      );
+      if (!membership) {
+        return res.status(403).json({ error: 'Kein Zugriff auf diesen Mandanten' });
+      }
+      tenantRole = membership.role;
+    }
+
     req.user = user;
+    req.tenantId = requestedTenantId;
+    req.tenantRole = tenantRole;
     next();
   } catch {
     res.status(401).json({ error: 'Token ungültig oder abgelaufen' });
@@ -38,8 +54,70 @@ export async function authenticate(req, res, next) {
 }
 
 export function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') {
+  const isLegacyAdmin = req.user?.role === 'admin';
+  const isSuperAdmin = Boolean(req.user?.super_admin);
+  const isTenantAdmin = req.tenantRole === 'admin';
+  if (!isLegacyAdmin && !isSuperAdmin && !isTenantAdmin) {
     return res.status(403).json({ error: 'Administratorrechte erforderlich' });
   }
   next();
+}
+
+export function requireSuperAdmin(req, res, next) {
+  if (!req.user?.super_admin) {
+    return res.status(403).json({ error: 'Super-Admin-Rechte erforderlich' });
+  }
+  next();
+}
+
+export async function requireTenantAccess(req, res, next) {
+  const tenantId = Number(req.params.tenantId ?? req.tenantId);
+  if (!Number.isInteger(tenantId) || tenantId <= 0) {
+    return res.status(400).json({ error: 'Ungueltige Mandanten-ID' });
+  }
+
+  if (req.user?.super_admin) {
+    req.tenantId = tenantId;
+    req.tenantRole = req.tenantRole ?? 'admin';
+    return next();
+  }
+
+  const membership = await db.queryOne(
+    'SELECT role FROM tenant_members WHERE tenant_id = ? AND user_id = ?',
+    [tenantId, req.user.id]
+  );
+
+  if (!membership) {
+    return res.status(403).json({ error: 'Kein Zugriff auf diesen Mandanten' });
+  }
+
+  req.tenantId = tenantId;
+  req.tenantRole = membership.role;
+  return next();
+}
+
+export async function requireTenantAdmin(req, res, next) {
+  const tenantId = Number(req.params.tenantId ?? req.tenantId);
+  if (!Number.isInteger(tenantId) || tenantId <= 0) {
+    return res.status(400).json({ error: 'Ungueltige Mandanten-ID' });
+  }
+
+  if (req.user?.super_admin) {
+    req.tenantId = tenantId;
+    req.tenantRole = 'admin';
+    return next();
+  }
+
+  const membership = await db.queryOne(
+    'SELECT role FROM tenant_members WHERE tenant_id = ? AND user_id = ?',
+    [tenantId, req.user.id]
+  );
+
+  if (!membership || membership.role !== 'admin') {
+    return res.status(403).json({ error: 'Administratorrechte fuer diesen Mandanten erforderlich' });
+  }
+
+  req.tenantId = tenantId;
+  req.tenantRole = membership.role;
+  return next();
 }

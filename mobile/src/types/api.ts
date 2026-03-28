@@ -3,11 +3,22 @@ export type User = {
   name: string;
   email: string;
   role: 'admin' | 'user';
+  super_admin?: boolean;
+  active_tenant_id?: number | null;
+  tenant_role?: 'admin' | 'user' | null;
+  is_admin?: boolean;
+};
+
+export type TenantMembership = {
+  id: number;
+  name: string;
+  role: 'admin' | 'user';
 };
 
 export type AuthResponse = {
   token: string;
   user: User;
+  available_tenants?: TenantMembership[];
 };
 
 export type Vehicle = {

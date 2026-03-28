@@ -17,8 +17,8 @@ function PrivateRoute({ children }) {
 }
 
 function AdminRoute({ children }) {
-  const { user } = useAuth();
-  return user?.role === 'admin' ? children : <Navigate to="/" replace />;
+  const { isAdmin } = useAuth();
+  return isAdmin ? children : <Navigate to="/" replace />;
 }
 
 function PublicRoute({ children }) {

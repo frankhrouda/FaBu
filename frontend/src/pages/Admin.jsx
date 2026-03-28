@@ -1,5 +1,16 @@
-import { useState, useEffect } from 'react';
-import { Users, ShieldCheck, User, Trash2, Crown, FileDown, FileText } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Users,
+  ShieldCheck,
+  User,
+  Trash2,
+  Crown,
+  FileDown,
+  FileText,
+  Building2,
+  Plus,
+  Link as LinkIcon,
+} from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast, ToastContainer } from '../components/Toast';
@@ -81,36 +92,136 @@ function buildBillingCsv(summary) {
     .join('\n');
 }
 
+function initialTab(isSuperAdmin) {
+  return isSuperAdmin ? 'tenants' : 'users';
+}
+
 export default function Admin() {
-  const { user: me } = useAuth();
+  const {
+    user: me,
+    isAdmin,
+    availableTenants,
+    activeTenantId,
+    switchTenant,
+    switchingTenant,
+  } = useAuth();
+
+  const isSuperAdmin = Boolean(me?.super_admin);
   const { toasts, show, dismiss } = useToast();
-  const [users, setUsers] = useState([]);
+
+  const [tab, setTab] = useState(initialTab(isSuperAdmin));
+  const [tenants, setTenants] = useState([]);
+  const [selectedTenantId, setSelectedTenantId] = useState(activeTenantId ?? null);
+  const [members, setMembers] = useState([]);
   const [reservations, setReservations] = useState([]);
-  const [tab, setTab] = useState('users');
   const [loading, setLoading] = useState(true);
+
   const [selectedUser, setSelectedUser] = useState(null);
   const [periodMonth, setPeriodMonth] = useState(getCurrentMonthValue);
   const [dateRange, setDateRange] = useState(() => getMonthDateRange(getCurrentMonthValue()));
   const [kmSummary, setKmSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
-  const load = async () => {
+  const [newTenantForm, setNewTenantForm] = useState({ name: '', first_admin_email: '' });
+  const [creatingTenant, setCreatingTenant] = useState(false);
+
+  const [inviteForm, setInviteForm] = useState({ email: '', expires_in_hours: 24 });
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [invitations, setInvitations] = useState([]);
+
+  const effectiveTenantId = selectedTenantId ?? activeTenantId ?? null;
+
+  const loadTenants = async () => {
+    if (isSuperAdmin) {
+      const result = await api.get('/admin/tenants');
+      const tenantItems = result.tenants || [];
+      setTenants(tenantItems);
+      if (!selectedTenantId && tenantItems[0]?.id) {
+        setSelectedTenantId(tenantItems[0].id);
+      }
+      return;
+    }
+
+    const localTenants = availableTenants || [];
+    setTenants(localTenants);
+    if (!selectedTenantId && localTenants[0]?.id) {
+      setSelectedTenantId(localTenants[0].id);
+    }
+  };
+
+  const loadMembers = async (tenantId) => {
+    if (!tenantId) {
+      setMembers([]);
+      return;
+    }
+
+    const endpoint = isSuperAdmin
+      ? `/admin/tenants/${tenantId}/members`
+      : `/tenants/${tenantId}/members`;
+
+    const result = await api.get(endpoint);
+    setMembers(result.members || []);
+  };
+
+  const loadReservations = async () => {
+    const result = await api.get('/reservations');
+    setReservations(result || []);
+  };
+
+  const loadInvitations = async (tenantId) => {
+    if (!tenantId) {
+      setInvitations([]);
+      return;
+    }
+
+    try {
+      const result = await api.get(`/tenants/${tenantId}/invitations`);
+      setInvitations(result.invitations || []);
+    } catch {
+      setInvitations([]);
+    }
+  };
+
+  const loadAll = async () => {
     setLoading(true);
     try {
-      const [u, r] = await Promise.all([api.get('/users'), api.get('/reservations')]);
-      setUsers(u);
-      setReservations(r);
+      await Promise.all([loadTenants(), loadReservations()]);
+    } catch (err) {
+      show(err.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    setTab(initialTab(isSuperAdmin));
+  }, [isSuperAdmin]);
+
+  useEffect(() => {
+    void loadAll();
+  }, [isSuperAdmin]);
+
+  useEffect(() => {
+    if (!effectiveTenantId) return;
+
+    const sync = async () => {
+      try {
+        if (isSuperAdmin && activeTenantId !== effectiveTenantId) {
+          await switchTenant(effectiveTenantId);
+        }
+        await Promise.all([loadMembers(effectiveTenantId), loadInvitations(effectiveTenantId)]);
+      } catch (err) {
+        show(err.message, 'error');
+      }
+    };
+
+    void sync();
+  }, [effectiveTenantId, isSuperAdmin, activeTenantId]);
 
   const loadUserKmSummary = async (user, range = dateRange) => {
     if (!user) return;
     if (!range.from || !range.to) {
-      show('Bitte gültigen Zeitraum auswählen', 'error');
+      show('Bitte gueltigen Zeitraum auswaehlen', 'error');
       return;
     }
 
@@ -125,30 +236,85 @@ export default function Admin() {
     }
   };
 
-  const changeRole = async (userId, newRole) => {
+  const changeRole = async (userId, currentRole) => {
+    if (!effectiveTenantId) return;
+    const nextRole = currentRole === 'admin' ? 'user' : 'admin';
+
     try {
-      await api.patch(`/users/${userId}/role`, { role: newRole });
-      show(`Rolle auf "${newRole === 'admin' ? 'Administrator' : 'Benutzer'}" geändert`);
-      load();
+      const endpoint = isSuperAdmin
+        ? `/admin/tenants/${effectiveTenantId}/members/${userId}/role`
+        : `/tenants/${effectiveTenantId}/members/${userId}/role`;
+      await api.patch(endpoint, { role: nextRole });
+      show(`Rolle auf "${nextRole === 'admin' ? 'Administrator' : 'Benutzer'}" geaendert`);
+      await loadMembers(effectiveTenantId);
     } catch (err) {
       show(err.message, 'error');
     }
   };
 
-  const deleteUser = async (userId, name) => {
-    if (!confirm(`Benutzer "${name}" wirklich löschen?`)) return;
+  const removeMember = async (userId, name) => {
+    if (!effectiveTenantId) return;
+    if (!confirm(`Mitglied "${name}" wirklich aus diesem Mandanten entfernen?`)) return;
+
     try {
-      await api.delete(`/users/${userId}`);
-      show('Benutzer gelöscht');
-      load();
+      await api.delete(`/tenants/${effectiveTenantId}/members/${userId}`);
+      show('Mitglied entfernt');
+      await loadMembers(effectiveTenantId);
     } catch (err) {
       show(err.message, 'error');
     }
   };
 
-  const selectUser = async (user) => {
-    setSelectedUser(user);
-    await loadUserKmSummary(user);
+  const createTenant = async (e) => {
+    e.preventDefault();
+    if (!newTenantForm.name.trim()) {
+      show('Mandantenname ist erforderlich', 'error');
+      return;
+    }
+
+    setCreatingTenant(true);
+    try {
+      await api.post('/admin/tenants', {
+        name: newTenantForm.name.trim(),
+        first_admin_email: newTenantForm.first_admin_email.trim() || undefined,
+      });
+      setNewTenantForm({ name: '', first_admin_email: '' });
+      show('Mandant erstellt');
+      await loadTenants();
+    } catch (err) {
+      show(err.message, 'error');
+    } finally {
+      setCreatingTenant(false);
+    }
+  };
+
+  const createInvitation = async (e) => {
+    e.preventDefault();
+    if (!effectiveTenantId) return;
+
+    setCreatingInvite(true);
+    try {
+      const result = await api.post(`/tenants/${effectiveTenantId}/invitations`, {
+        email: inviteForm.email.trim() || undefined,
+        expires_in_hours: Number(inviteForm.expires_in_hours || 24),
+      });
+      const code = result?.invitation?.code;
+      if (code) {
+        await navigator.clipboard.writeText(code).catch(() => {});
+      }
+      show(code ? `Einladung erstellt: ${code} (in Zwischenablage)` : 'Einladung erstellt');
+      setInviteForm((prev) => ({ ...prev, email: '' }));
+      await loadInvitations(effectiveTenantId);
+    } catch (err) {
+      show(err.message, 'error');
+    } finally {
+      setCreatingInvite(false);
+    }
+  };
+
+  const selectUser = async (nextUser) => {
+    setSelectedUser(nextUser);
+    await loadUserKmSummary(nextUser);
   };
 
   const applyMonth = async (monthValue) => {
@@ -264,13 +430,16 @@ export default function Admin() {
     popup.print();
   };
 
-  // Stats
-  const stats = {
-    totalUsers: users.length,
+  const stats = useMemo(() => ({
+    totalUsers: members.length,
     totalReservations: reservations.length,
     completedTrips: reservations.filter((r) => r.status === 'completed').length,
     totalKm: reservations.filter((r) => r.km_driven).reduce((sum, r) => sum + Number(r.km_driven), 0),
-  };
+  }), [members, reservations]);
+
+  if (!isAdmin) {
+    return <div className="p-4">Keine Berechtigung.</div>;
+  }
 
   return (
     <div className="p-4 space-y-5">
@@ -282,100 +451,207 @@ export default function Admin() {
         </h1>
       </div>
 
-      {/* Overview stats */}
       <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Benutzer" value={stats.totalUsers} sub="registriert" color="indigo" />
-        <StatCard label="Fahrten gesamt" value={stats.totalReservations} sub="Einträge" color="blue" />
+        <StatCard label="Benutzer" value={stats.totalUsers} sub="im Mandant" color="indigo" />
+        <StatCard label="Fahrten gesamt" value={stats.totalReservations} sub="sichtbar" color="blue" />
         <StatCard label="Abgeschlossen" value={stats.completedTrips} sub="Fahrten" color="emerald" />
         <StatCard label="Kilometer" value={formatKm(stats.totalKm)} sub="gesamt gefahren" color="amber" />
       </div>
 
-      {/* Tabs */}
+      <div className="space-y-2">
+        <label className="text-xs text-gray-500">Aktiver Mandant</label>
+        <select
+          className="input"
+          value={effectiveTenantId || ''}
+          onChange={(e) => setSelectedTenantId(Number(e.target.value))}
+          disabled={switchingTenant || tenants.length === 0}
+        >
+          {tenants.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-        {[['users', 'Benutzer'], ['log', 'Fahrtenbuch']].map(([key, label]) => (
+        {isSuperAdmin ? (
           <button
-            key={key}
-            onClick={() => setTab(key)}
+            onClick={() => setTab('tenants')}
             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-              tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              tab === 'tenants' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {label}
+            Mandanten
           </button>
-        ))}
+        ) : null}
+        <button
+          onClick={() => setTab('users')}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+            tab === 'users' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Benutzer
+        </button>
+        <button
+          onClick={() => setTab('log')}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+            tab === 'log' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Fahrtenbuch
+        </button>
       </div>
 
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => <div key={i} className="bg-gray-200 animate-pulse h-20 rounded-xl" />)}
         </div>
+      ) : tab === 'tenants' && isSuperAdmin ? (
+        <div className="space-y-4">
+          <form onSubmit={createTenant} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2"><Building2 className="w-4 h-4" /> Neuen Mandanten erstellen</h2>
+            <input
+              className="input"
+              placeholder="Mandantenname"
+              value={newTenantForm.name}
+              onChange={(e) => setNewTenantForm((prev) => ({ ...prev, name: e.target.value }))}
+            />
+            <input
+              className="input"
+              placeholder="Erster Admin (E-Mail, optional)"
+              value={newTenantForm.first_admin_email}
+              onChange={(e) => setNewTenantForm((prev) => ({ ...prev, first_admin_email: e.target.value }))}
+            />
+            <button disabled={creatingTenant} className="btn-primary inline-flex items-center gap-1">
+              <Plus className="w-4 h-4" /> {creatingTenant ? 'Erstelle...' : 'Mandant erstellen'}
+            </button>
+          </form>
+
+          <div className="space-y-2">
+            {tenants.map((tenant) => (
+              <button
+                key={tenant.id}
+                onClick={() => setSelectedTenantId(tenant.id)}
+                className={`w-full text-left bg-white rounded-xl border shadow-sm p-4 ${selectedTenantId === tenant.id ? 'border-indigo-200 ring-2 ring-indigo-100' : 'border-gray-100'}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-gray-900">{tenant.name}</p>
+                    <p className="text-xs text-gray-500">{tenant.user_count || 0} Nutzer · {tenant.vehicle_count || 0} Fahrzeuge</p>
+                  </div>
+                  <span className="text-xs text-gray-400">{formatDate(String(tenant.created_at || '').slice(0, 10))}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
       ) : tab === 'users' ? (
         <div className="space-y-4">
-          <div className="space-y-3">
-            {users.map((u) => (
-              <div
-                key={u.id}
-                className={`bg-white rounded-xl border shadow-sm p-4 transition-colors ${
-                  selectedUser?.id === u.id ? 'border-indigo-200 ring-2 ring-indigo-100' : 'border-gray-100'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => selectUser(u)}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
-                      u.role === 'admin' ? 'bg-indigo-600' : 'bg-gray-400'
-                    }`}
-                    title="Benutzer-Statistik anzeigen"
-                  >
-                    {u.name.charAt(0).toUpperCase()}
-                  </button>
-                  <button
-                    onClick={() => selectUser(u)}
-                    className="flex-1 min-w-0 text-left"
-                    title="Benutzer-Statistik anzeigen"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-gray-900 text-sm">{u.name}</p>
-                      {u.role === 'admin' && <Crown className="w-3.5 h-3.5 text-amber-500" />}
-                      {u.id === me?.id && <span className="text-xs text-gray-400">(ich)</span>}
-                    </div>
-                    <p className="text-xs text-gray-500 truncate">{u.email}</p>
-                    <p className="text-xs text-gray-400">Seit {formatDate(u.created_at?.slice(0, 10))}</p>
-                  </button>
-                  {u.id !== me?.id && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => changeRole(u.id, u.role === 'admin' ? 'user' : 'admin')}
-                        className={`p-2 rounded-lg transition-colors text-xs ${
-                          u.role === 'admin'
-                            ? 'text-indigo-600 hover:bg-indigo-50'
-                            : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
-                        }`}
-                        title={u.role === 'admin' ? 'Zum Benutzer machen' : 'Zum Admin machen'}
-                      >
-                        {u.role === 'admin' ? <User className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => deleteUser(u.id, u.name)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Löschen"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+          <form onSubmit={createInvitation} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Einladungscode erstellen</h2>
+            <input
+              className="input"
+              placeholder="E-Mail (optional)"
+              value={inviteForm.email}
+              onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
+            />
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-500">Gueltig (Stunden)</label>
+              <input
+                type="number"
+                min="1"
+                className="input w-24"
+                value={inviteForm.expires_in_hours}
+                onChange={(e) => setInviteForm((prev) => ({ ...prev, expires_in_hours: Number(e.target.value || 24) }))}
+              />
+            </div>
+            <button disabled={creatingInvite || !effectiveTenantId} className="btn-primary inline-flex items-center gap-1">
+              <Plus className="w-4 h-4" /> {creatingInvite ? 'Erstelle...' : 'Einladung erstellen'}
+            </button>
+
+            {invitations.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {invitations.slice(0, 5).map((inv) => (
+                  <div key={inv.id} className="text-xs text-gray-600 border border-gray-100 rounded-lg px-2 py-1.5">
+                    <span className="font-mono text-gray-900">{inv.code}</span>
+                    {' · '}
+                    {inv.email || 'ohne E-Mail-Bindung'}
+                    {' · bis '}
+                    {formatDate(String(inv.expires_at).slice(0, 10))}
+                    {inv.used_at ? ' · verwendet' : ''}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+          </form>
+
+          <div className="space-y-3">
+            {members.map((u) => {
+              const role = u.tenant_role || u.role;
+              return (
+                <div
+                  key={u.id}
+                  className={`bg-white rounded-xl border shadow-sm p-4 transition-colors ${
+                    selectedUser?.id === u.id ? 'border-indigo-200 ring-2 ring-indigo-100' : 'border-gray-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => selectUser(u)}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                        role === 'admin' ? 'bg-indigo-600' : 'bg-gray-400'
+                      }`}
+                      title="Benutzer-Statistik anzeigen"
+                    >
+                      {u.name.charAt(0).toUpperCase()}
+                    </button>
+                    <button
+                      onClick={() => selectUser(u)}
+                      className="flex-1 min-w-0 text-left"
+                      title="Benutzer-Statistik anzeigen"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-gray-900 text-sm">{u.name}</p>
+                        {role === 'admin' && <Crown className="w-3.5 h-3.5 text-amber-500" />}
+                        {u.id === me?.id && <span className="text-xs text-gray-400">(ich)</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                      <p className="text-xs text-gray-400">Seit {formatDate(String(u.created_at || u.joined_at || '').slice(0, 10))}</p>
+                    </button>
+                    {u.id !== me?.id && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => changeRole(u.id, role)}
+                          className={`p-2 rounded-lg transition-colors text-xs ${
+                            role === 'admin'
+                              ? 'text-indigo-600 hover:bg-indigo-50'
+                              : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
+                          }`}
+                          title={role === 'admin' ? 'Zum Benutzer machen' : 'Zum Admin machen'}
+                        >
+                          {role === 'admin' ? <User className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => removeMember(u.id, u.name)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Aus Mandant entfernen"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className="font-semibold text-gray-900 text-sm">Kilometer-Auswertung je Benutzer</h2>
               {selectedUser ? (
-                <span className="text-xs text-gray-500">Ausgewählt: {selectedUser.name}</span>
+                <span className="text-xs text-gray-500">Ausgewaehlt: {selectedUser.name}</span>
               ) : (
-                <span className="text-xs text-gray-400">Benutzer auswählen</span>
+                <span className="text-xs text-gray-400">Benutzer auswaehlen</span>
               )}
             </div>
 
@@ -471,21 +747,20 @@ export default function Admin() {
                       </div>
                       <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600">
                         <div><span className="text-gray-400">Preis/km:</span> {formatCurrency(item.price_per_km)}</div>
-                        <div><span className="text-gray-400">Pauschale:</span> {item.flat_fee == null ? '—' : formatCurrency(item.flat_fee)}</div>
+                        <div><span className="text-gray-400">Pauschale:</span> {item.flat_fee == null ? '-' : formatCurrency(item.flat_fee)}</div>
                         <div><span className="text-gray-400">KM-Kosten:</span> {formatCurrency(item.km_cost)}</div>
                         <div><span className="text-gray-400">Gesamt:</span> <span className="font-semibold text-indigo-700">{formatCurrency(item.total_cost)}</span></div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-gray-500">Für den gewählten Zeitraum wurden keine abgeschlossenen Fahrten mit Kilometern gefunden.</p>
+                  <p className="text-sm text-gray-500">Fuer den gewaehlten Zeitraum wurden keine abgeschlossenen Fahrten mit Kilometern gefunden.</p>
                 )}
               </div>
             ) : null}
           </div>
         </div>
       ) : (
-        /* Logbook view */
         <div className="space-y-3">
           {reservations.filter((r) => r.status === 'completed').length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
@@ -504,7 +779,7 @@ export default function Admin() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium text-gray-700">{formatDateRange(r.date, r.date_to)}</p>
-                      <p className="text-xs text-gray-500">{r.time_from} – {r.time_to}</p>
+                      <p className="text-xs text-gray-500">{r.time_from} - {r.time_to}</p>
                     </div>
                   </div>
                   <div className="mt-2 pt-2 border-t border-gray-50 grid grid-cols-2 gap-2 text-xs text-gray-600">

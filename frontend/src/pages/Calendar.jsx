@@ -35,8 +35,7 @@ function getNextDays(days = 14) {
 }
 
 export default function Calendar() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const { isAdmin } = useAuth();
 
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState('all');

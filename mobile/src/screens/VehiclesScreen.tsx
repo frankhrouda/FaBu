@@ -10,7 +10,7 @@ import type { Vehicle } from '../types/api';
 type Props = NativeStackScreenProps<RootStackParamList, 'Vehicles'>;
 
 export function VehiclesScreen({ navigation }: Props) {
-  const { token, user, logout } = useAuth();
+  const { token, user, logout, availableTenants, activeTenantId, switchTenant, switchingTenant, isAdmin } = useAuth();
 
   const vehiclesQuery = useQuery({
     queryKey: ['vehicles'],
@@ -50,6 +50,29 @@ export function VehiclesScreen({ navigation }: Props) {
       </View>
 
       <Text style={styles.userText}>Angemeldet als: {user?.name}</Text>
+      {isAdmin ? <Text style={styles.userMeta}>Rolle: Admin</Text> : null}
+
+      {availableTenants.length > 1 ? (
+        <View style={styles.tenantWrap}>
+          <Text style={styles.tenantLabel}>Mandant:</Text>
+          <View style={styles.tenantRow}>
+            {availableTenants.map((tenant) => {
+              const active = tenant.id === activeTenantId;
+              return (
+                <Pressable
+                  key={tenant.id}
+                  style={[styles.tenantButton, active ? styles.tenantButtonActive : null]}
+                  onPress={() => void switchTenant(tenant.id)}
+                  disabled={switchingTenant || active}
+                >
+                  <Text style={[styles.tenantButtonText, active ? styles.tenantButtonTextActive : null]}>{tenant.name}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {switchingTenant ? <ActivityIndicator size="small" /> : null}
+        </View>
+      ) : null}
 
       {vehiclesQuery.isLoading ? (
         <ActivityIndicator />
@@ -121,7 +144,45 @@ const styles = StyleSheet.create({
   },
   userText: {
     color: '#475467',
+    marginBottom: 6,
+  },
+  userMeta: {
+    color: '#6b7280',
     marginBottom: 12,
+    fontSize: 12,
+  },
+  tenantWrap: {
+    marginBottom: 12,
+    gap: 8,
+  },
+  tenantLabel: {
+    color: '#475467',
+    fontWeight: '600',
+  },
+  tenantRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tenantButton: {
+    borderWidth: 1,
+    borderColor: '#c7d1d9',
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tenantButtonActive: {
+    backgroundColor: '#145374',
+    borderColor: '#145374',
+  },
+  tenantButtonText: {
+    color: '#1d2a34',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tenantButtonTextActive: {
+    color: '#fff',
   },
   card: {
     backgroundColor: '#fff',

@@ -18,8 +18,8 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const { token, user } = await api.post('/auth/login', form);
-      login(token, user);
+      const { token, user, available_tenants } = await api.post('/auth/login', form);
+      login(token, user, available_tenants || []);
       navigate('/');
     } catch (err) {
       setError(err.message);
