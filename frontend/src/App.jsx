@@ -9,6 +9,7 @@ import Vehicles from './pages/Vehicles';
 import Reservations from './pages/Reservations';
 import NewReservation from './pages/NewReservation';
 import Admin from './pages/Admin';
+import SuperAdminTenants from './pages/SuperAdminTenants';
 import Calendar from './pages/Calendar';
 
 function PrivateRoute({ children }) {
@@ -20,6 +21,12 @@ function PrivateRoute({ children }) {
 function AdminRoute({ children }) {
   const { isAdmin } = useAuth();
   return isAdmin ? children : <Navigate to="/" replace />;
+}
+
+function SuperAdminRoute({ children }) {
+  const { user } = useAuth();
+  const isSuperAdmin = Boolean(user?.super_admin);
+  return isSuperAdmin ? children : <Navigate to="/" replace />;
 }
 
 function PublicRoute({ children }) {
@@ -43,6 +50,7 @@ export default function App() {
             <Route path="reservations/new" element={<NewReservation />} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+            <Route path="admin/tenants" element={<SuperAdminRoute><SuperAdminTenants /></SuperAdminRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

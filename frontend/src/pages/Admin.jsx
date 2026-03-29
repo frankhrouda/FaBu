@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   ShieldCheck,
@@ -99,6 +100,7 @@ function initialTab(isSuperAdmin) {
 const ALL_TENANTS_VALUE = 'all';
 
 export default function Admin() {
+  const navigate = useNavigate();
   const {
     user: me,
     isAdmin,
@@ -524,9 +526,20 @@ export default function Admin() {
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
       <div className="pt-2">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <ShieldCheck className="w-6 h-6 text-indigo-600" /> Administration
-        </h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-indigo-600" /> Administration
+          </h1>
+          {isSuperAdmin && (
+            <button
+              onClick={() => navigate('/admin/tenants')}
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <Building2 className="w-4 h-4" />
+              Mandantenverwaltung
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
