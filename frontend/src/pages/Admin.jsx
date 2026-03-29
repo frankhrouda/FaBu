@@ -11,6 +11,7 @@ import {
   Building2,
   Plus,
   Link as LinkIcon,
+  ChevronLeft,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -519,6 +520,41 @@ export default function Admin() {
 
   if (!isAdmin) {
     return <div className="p-4">Keine Berechtigung.</div>;
+  }
+
+  // Super-Admin: Show only tenant management access
+  if (isSuperAdmin) {
+    return (
+      <div className="p-4 max-w-2xl">
+        <ToastContainer toasts={toasts} dismiss={dismiss} />
+
+        <div className="space-y-6 mt-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <ShieldCheck className="w-8 h-8 text-indigo-600" />
+              Super-Admin Panel
+            </h1>
+            <p className="text-gray-600">Verwalte alle Mandanten und deren Einstellungen</p>
+          </div>
+
+          <div
+            onClick={() => navigate('/admin/tenants')}
+            className="cursor-pointer bg-gradient-to-br from-indigo-50 to-indigo-100 border-2 border-indigo-300 rounded-xl p-6 hover:from-indigo-100 hover:to-indigo-200 hover:border-indigo-400 transition-all shadow-md hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-indigo-600 rounded-lg text-white">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Mandantenverwaltung</h2>
+                <p className="text-sm text-gray-700 mt-1">Anzeigen, bearbeiten und verwalten aller Mandanten und deren Mitglieder</p>
+              </div>
+              <ChevronLeft className="w-6 h-6 text-indigo-600 rotate-180 ml-auto" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
