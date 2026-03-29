@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import TenantAdminRequest from './pages/TenantAdminRequest';
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
 import Reservations from './pages/Reservations';
@@ -34,6 +35,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/tenant-admin-request" element={<TenantAdminRequest />} />
           <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="vehicles" element={<Vehicles />} />
