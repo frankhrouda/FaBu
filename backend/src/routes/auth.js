@@ -237,8 +237,24 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'E-Mail und Passwort erforderlich' });
     }
 
-    const row = await db.queryOne('SELECT * FROM users WHERE email = ?', [email]);
-    if (!row) return res.status(401).json({ error: 'E-Mail-Adresse oder Passwort ist nicht korrekt.' });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const row = await db.queryOne('SELECT * FROM users WHERE LOWER(email) = ?', [normalizedEmail]);
+    if (!row) {
+      const pendingRequest = await db.queryOne(
+        `SELECT id
+         FROM tenant_admin_requests
+         WHERE LOWER(email) = ? AND status = 'pending'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [normalizedEmail]
+      );
+
+      if (pendingRequest) {
+        return res.status(403).json({ error: 'Deine Anfrage wurde noch nicht vom Superadmin bearbeitet.' });
+      }
+
+      return res.status(401).json({ error: 'E-Mail-Adresse oder Passwort ist nicht korrekt.' });
+    }
 
     const valid = await bcrypt.compare(password, row.password);
     if (!valid) return res.status(401).json({ error: 'E-Mail-Adresse oder Passwort ist nicht korrekt.' });
