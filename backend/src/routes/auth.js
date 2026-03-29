@@ -178,6 +178,58 @@ router.post('/register-with-invite', async (req, res) => {
   }
 });
 
+router.post('/tenant-admin-requests', async (req, res) => {
+  try {
+    const { name, email, tenant_name, password, message } = req.body || {};
+    if (!name || !email || !tenant_name) {
+      return res.status(400).json({ error: 'Name, E-Mail und Mandantenname sind erforderlich' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedTenantName = String(tenant_name).trim();
+    const normalizedName = String(name).trim();
+    const normalizedMessage = message ? String(message).trim() : null;
+
+    if (normalizedTenantName.length < 2) {
+      return res.status(400).json({ error: 'Mandantenname ist zu kurz' });
+    }
+
+    if (password && String(password).length < 6) {
+      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen haben' });
+    }
+
+    const existingPending = await db.queryOne(
+      `SELECT id FROM tenant_admin_requests
+       WHERE email = ? AND tenant_name = ? AND status = 'pending'`,
+      [normalizedEmail, normalizedTenantName]
+    );
+    if (existingPending) {
+      return res.status(409).json({ error: 'Für diese E-Mail und diesen Mandanten existiert bereits eine offene Anfrage' });
+    }
+
+    const passwordHash = password ? await bcrypt.hash(String(password), 10) : null;
+
+    const inserted = await db.execute(
+      `INSERT INTO tenant_admin_requests (name, email, tenant_name, password_hash, message, status)
+       VALUES (?, ?, ?, ?, ?, 'pending') RETURNING id`,
+      [normalizedName, normalizedEmail, normalizedTenantName, passwordHash, normalizedMessage]
+    );
+
+    res.status(201).json({
+      request: {
+        id: inserted.row?.id ?? inserted.lastInsertId,
+        name: normalizedName,
+        email: normalizedEmail,
+        tenant_name: normalizedTenantName,
+        status: 'pending',
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Anfrage konnte nicht erstellt werden' });
+  }
+});
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;

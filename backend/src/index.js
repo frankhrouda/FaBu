@@ -40,6 +40,7 @@ app.use(express.json());
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/register-with-invite', authLimiter);
+app.use('/api/auth/tenant-admin-requests', authLimiter);
 app.use('/api', apiLimiter);
 
 app.use('/api/auth', authRoutes);

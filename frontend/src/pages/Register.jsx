@@ -7,9 +7,13 @@ import { useAuth } from '../context/AuthContext';
 export default function Register() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', invitation_code: '' });
+  const [requestForm, setRequestForm] = useState({ name: '', email: '', tenant_name: '', password: '', message: '' });
   const [error, setError] = useState('');
+  const [requestError, setRequestError] = useState('');
+  const [requestSuccess, setRequestSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [requestLoading, setRequestLoading] = useState(false);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -18,13 +22,44 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      const { token, user, available_tenants } = await api.post('/auth/register', form);
+      const payload = {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+      };
+
+      const response = form.invitation_code.trim()
+        ? await api.post('/auth/register-with-invite', {
+          ...payload,
+          code: form.invitation_code.trim(),
+        })
+        : await api.post('/auth/register', payload);
+
+      const { token, user, available_tenants } = response;
       login(token, user, available_tenants || []);
       navigate('/');
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const setRequest = (k) => (e) => setRequestForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const handleRequestSubmit = async (e) => {
+    e.preventDefault();
+    setRequestError('');
+    setRequestSuccess('');
+    setRequestLoading(true);
+    try {
+      await api.post('/auth/tenant-admin-requests', requestForm);
+      setRequestSuccess('Anfrage wurde gesendet. Der Super-Admin prüft sie zeitnah.');
+      setRequestForm({ name: '', email: '', tenant_name: '', password: '', message: '' });
+    } catch (err) {
+      setRequestError(err.message);
+    } finally {
+      setRequestLoading(false);
     }
   };
 
@@ -98,6 +133,18 @@ export default function Register() {
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Einladungscode (optional)</label>
+              <input
+                type="text"
+                value={form.invitation_code}
+                onChange={set('invitation_code')}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
+                placeholder="z. B. ABC123XYZ"
+              />
+              <p className="text-xs text-gray-500 mt-1">Wenn ein Code vorhanden ist, wirst du direkt diesem Mandanten zugeordnet.</p>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -120,9 +167,37 @@ export default function Register() {
               Anmelden
             </Link>
           </p>
-          <p className="text-center text-xs text-gray-400 mt-2">
-            Der erste registrierte Benutzer wird automatisch Administrator.
-          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-2xl p-6 mt-4">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Anfrage: Tenant-Admin werden</h3>
+
+          {requestError && (
+            <div className="bg-red-50 text-red-600 text-sm px-3 py-2 rounded-lg mb-4 border border-red-100">
+              {requestError}
+            </div>
+          )}
+          {requestSuccess && (
+            <div className="bg-emerald-50 text-emerald-700 text-sm px-3 py-2 rounded-lg mb-4 border border-emerald-100">
+              {requestSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handleRequestSubmit} className="space-y-3">
+            <input value={requestForm.name} onChange={setRequest('name')} required className="input" placeholder="Name" />
+            <input type="email" value={requestForm.email} onChange={setRequest('email')} required className="input" placeholder="E-Mail" />
+            <input value={requestForm.tenant_name} onChange={setRequest('tenant_name')} required className="input" placeholder="Gewünschter Tenant-Name" />
+            <input type="password" minLength={6} value={requestForm.password} onChange={setRequest('password')} className="input" placeholder="Passwort (für neues Konto, falls noch nicht registriert)" />
+            <textarea value={requestForm.message} onChange={setRequest('message')} rows={2} className="input resize-none" placeholder="Nachricht (optional)" />
+
+            <button
+              type="submit"
+              disabled={requestLoading}
+              className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-2.5 rounded-xl hover:bg-black transition-colors disabled:opacity-60"
+            >
+              {requestLoading ? 'Wird gesendet...' : 'Admin-Anfrage senden'}
+            </button>
+          </form>
         </div>
       </div>
     </div>

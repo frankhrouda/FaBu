@@ -92,6 +92,180 @@ router.post('/tenants', authenticate, requireSuperAdmin, async (req, res) => {
   }
 });
 
+router.patch('/tenants/:tenantId', authenticate, requireSuperAdmin, async (req, res) => {
+  const tenantId = Number(req.params.tenantId);
+  const { name } = req.body || {};
+
+  if (!Number.isInteger(tenantId) || tenantId <= 0) {
+    return res.status(400).json({ error: 'Ungueltige Mandanten-ID' });
+  }
+  if (!name || String(name).trim().length < 2) {
+    return res.status(400).json({ error: 'Mandantenname ist erforderlich' });
+  }
+
+  try {
+    const tenant = await db.queryOne('SELECT id, name FROM tenants WHERE id = ?', [tenantId]);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Mandant nicht gefunden' });
+    }
+
+    const duplicate = await db.queryOne('SELECT id FROM tenants WHERE name = ? AND id != ?', [String(name).trim(), tenantId]);
+    if (duplicate) {
+      return res.status(409).json({ error: 'Mandantenname ist bereits vergeben' });
+    }
+
+    await db.execute('UPDATE tenants SET name = ? WHERE id = ?', [String(name).trim(), tenantId]);
+    const updated = await db.queryOne('SELECT id, name, created_by, created_at FROM tenants WHERE id = ?', [tenantId]);
+    res.json({ success: true, tenant: updated });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des Mandanten' });
+  }
+});
+
+router.get('/tenant-admin-requests', authenticate, requireSuperAdmin, async (req, res) => {
+  const status = req.query?.status ? String(req.query.status) : 'pending';
+  const allowedStatuses = ['pending', 'approved', 'rejected', 'all'];
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Ungueltiger Statusfilter' });
+  }
+
+  try {
+    const requests = status === 'all'
+      ? await db.queryMany(
+        `SELECT id, name, email, tenant_name, message, status, tenant_id, approved_user_id, decided_by, decided_at, created_at
+         FROM tenant_admin_requests
+         ORDER BY created_at DESC`,
+        []
+      )
+      : await db.queryMany(
+        `SELECT id, name, email, tenant_name, message, status, tenant_id, approved_user_id, decided_by, decided_at, created_at
+         FROM tenant_admin_requests
+         WHERE status = ?
+         ORDER BY created_at DESC`,
+        [status]
+      );
+
+    res.json({ requests });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Laden der Anfragen' });
+  }
+});
+
+router.post('/tenant-admin-requests/:requestId/approve', authenticate, requireSuperAdmin, async (req, res) => {
+  const requestId = Number(req.params.requestId);
+  const overrideTenantName = req.body?.tenant_name ? String(req.body.tenant_name).trim() : null;
+
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    return res.status(400).json({ error: 'Ungueltige Anfrage-ID' });
+  }
+
+  try {
+    const request = await db.queryOne(
+      `SELECT id, name, email, tenant_name, password_hash, status
+       FROM tenant_admin_requests
+       WHERE id = ?`,
+      [requestId]
+    );
+    if (!request) {
+      return res.status(404).json({ error: 'Anfrage nicht gefunden' });
+    }
+    if (request.status !== 'pending') {
+      return res.status(409).json({ error: 'Anfrage ist bereits bearbeitet' });
+    }
+
+    const tenantName = overrideTenantName && overrideTenantName.length >= 2
+      ? overrideTenantName
+      : request.tenant_name;
+
+    let tenant = await db.queryOne('SELECT id, name FROM tenants WHERE name = ?', [tenantName]);
+    if (!tenant) {
+      const insertedTenant = await db.execute(
+        'INSERT INTO tenants (name, created_by) VALUES (?, ?) RETURNING id',
+        [tenantName, req.user.id]
+      );
+      const tenantId = insertedTenant.row?.id ?? insertedTenant.lastInsertId;
+      tenant = await db.queryOne('SELECT id, name FROM tenants WHERE id = ?', [tenantId]);
+    }
+
+    let user = await db.queryOne('SELECT id, email FROM users WHERE LOWER(email) = ?', [String(request.email).toLowerCase()]);
+    if (!user) {
+      if (!request.password_hash) {
+        return res.status(409).json({ error: 'Antragsteller hat kein Konto und kein Passwort hinterlegt' });
+      }
+
+      const createdUser = await db.execute(
+        'INSERT INTO users (name, email, password, role, super_admin) VALUES (?, ?, ?, ?, ?) RETURNING id',
+        [request.name, String(request.email).toLowerCase(), request.password_hash, 'user', 0]
+      );
+      const userId = createdUser.row?.id ?? createdUser.lastInsertId;
+      user = await db.queryOne('SELECT id, email FROM users WHERE id = ?', [userId]);
+    }
+
+    await db.execute(
+      `INSERT INTO tenant_members (tenant_id, user_id, role)
+       VALUES (?, ?, 'admin')`,
+      [tenant.id, user.id]
+    ).catch(async () => {
+      await db.execute(
+        'UPDATE tenant_members SET role = ? WHERE tenant_id = ? AND user_id = ?',
+        ['admin', tenant.id, user.id]
+      );
+    });
+
+    await db.execute(
+      `UPDATE tenant_admin_requests
+       SET status = 'approved',
+           tenant_id = ?,
+           approved_user_id = ?,
+           decided_by = ?,
+           decided_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [tenant.id, user.id, req.user.id, requestId]
+    );
+
+    res.json({ success: true, tenant, user: { id: user.id, email: user.email } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Annehmen der Anfrage' });
+  }
+});
+
+router.post('/tenant-admin-requests/:requestId/reject', authenticate, requireSuperAdmin, async (req, res) => {
+  const requestId = Number(req.params.requestId);
+  const reason = req.body?.reason ? String(req.body.reason).trim() : null;
+
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    return res.status(400).json({ error: 'Ungueltige Anfrage-ID' });
+  }
+
+  try {
+    const request = await db.queryOne('SELECT id, status FROM tenant_admin_requests WHERE id = ?', [requestId]);
+    if (!request) {
+      return res.status(404).json({ error: 'Anfrage nicht gefunden' });
+    }
+    if (request.status !== 'pending') {
+      return res.status(409).json({ error: 'Anfrage ist bereits bearbeitet' });
+    }
+
+    await db.execute(
+      `UPDATE tenant_admin_requests
+       SET status = 'rejected',
+           message = COALESCE(?, message),
+           decided_by = ?,
+           decided_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [reason, req.user.id, requestId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Ablehnen der Anfrage' });
+  }
+});
+
 router.get('/tenants/:tenantId/members', authenticate, requireSuperAdmin, async (req, res) => {
   const tenantId = Number(req.params.tenantId);
   if (!Number.isInteger(tenantId) || tenantId <= 0) {

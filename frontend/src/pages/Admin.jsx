@@ -124,10 +124,14 @@ export default function Admin() {
 
   const [newTenantForm, setNewTenantForm] = useState({ name: '', first_admin_email: '' });
   const [creatingTenant, setCreatingTenant] = useState(false);
+  const [editingTenantId, setEditingTenantId] = useState(null);
+  const [editingTenantName, setEditingTenantName] = useState('');
 
   const [inviteForm, setInviteForm] = useState({ email: '', expires_in_hours: 24 });
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [invitations, setInvitations] = useState([]);
+  const [adminRequests, setAdminRequests] = useState([]);
+  const [requestProcessingId, setRequestProcessingId] = useState(null);
 
   const effectiveTenantId = selectedTenantId ?? activeTenantId ?? null;
 
@@ -186,6 +190,10 @@ export default function Admin() {
     setLoading(true);
     try {
       await Promise.all([loadTenants(), loadReservations()]);
+      if (isSuperAdmin) {
+        const requestResult = await api.get('/admin/tenant-admin-requests?status=pending');
+        setAdminRequests(requestResult.requests || []);
+      }
     } catch (err) {
       show(err.message, 'error');
     } finally {
@@ -285,6 +293,64 @@ export default function Admin() {
       show(err.message, 'error');
     } finally {
       setCreatingTenant(false);
+    }
+  };
+
+  const startTenantEdit = (tenant) => {
+    setEditingTenantId(tenant.id);
+    setEditingTenantName(tenant.name || '');
+  };
+
+  const saveTenantEdit = async (tenantId) => {
+    if (!editingTenantName.trim()) {
+      show('Mandantenname ist erforderlich', 'error');
+      return;
+    }
+    try {
+      await api.patch(`/admin/tenants/${tenantId}`, { name: editingTenantName.trim() });
+      setEditingTenantId(null);
+      setEditingTenantName('');
+      show('Mandant aktualisiert');
+      await loadTenants();
+    } catch (err) {
+      show(err.message, 'error');
+    }
+  };
+
+  const approveAdminRequest = async (request) => {
+    setRequestProcessingId(request.id);
+    try {
+      await api.post(`/admin/tenant-admin-requests/${request.id}/approve`, {
+        tenant_name: request.tenant_name,
+      });
+      show('Anfrage angenommen und Tenant-Admin erstellt');
+      const requestResult = await api.get('/admin/tenant-admin-requests?status=pending');
+      setAdminRequests(requestResult.requests || []);
+      await loadTenants();
+      if (!selectedTenantId) {
+        const refreshed = await api.get('/admin/tenants');
+        const firstTenant = refreshed.tenants?.[0];
+        if (firstTenant?.id) setSelectedTenantId(firstTenant.id);
+      }
+    } catch (err) {
+      show(err.message, 'error');
+    } finally {
+      setRequestProcessingId(null);
+    }
+  };
+
+  const rejectAdminRequest = async (request) => {
+    const reason = window.prompt('Optionaler Ablehnungsgrund:', '') || undefined;
+    setRequestProcessingId(request.id);
+    try {
+      await api.post(`/admin/tenant-admin-requests/${request.id}/reject`, { reason });
+      show('Anfrage abgelehnt');
+      const requestResult = await api.get('/admin/tenant-admin-requests?status=pending');
+      setAdminRequests(requestResult.requests || []);
+    } catch (err) {
+      show(err.message, 'error');
+    } finally {
+      setRequestProcessingId(null);
     }
   };
 
@@ -528,20 +594,80 @@ export default function Admin() {
 
           <div className="space-y-2">
             {tenants.map((tenant) => (
-              <button
+              <div
                 key={tenant.id}
-                onClick={() => setSelectedTenantId(tenant.id)}
                 className={`w-full text-left bg-white rounded-xl border shadow-sm p-4 ${selectedTenantId === tenant.id ? 'border-indigo-200 ring-2 ring-indigo-100' : 'border-gray-100'}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-gray-900">{tenant.name}</p>
-                    <p className="text-xs text-gray-500">{tenant.user_count || 0} Nutzer · {tenant.vehicle_count || 0} Fahrzeuge</p>
+                  <div className="flex-1 min-w-0">
+                    {editingTenantId === tenant.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          className="input"
+                          value={editingTenantName}
+                          onChange={(e) => setEditingTenantName(e.target.value)}
+                        />
+                        <button className="btn-primary" onClick={() => saveTenantEdit(tenant.id)}>Speichern</button>
+                        <button className="btn-secondary" onClick={() => setEditingTenantId(null)}>Abbrechen</button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-gray-900">{tenant.name}</p>
+                        <p className="text-xs text-gray-500">{tenant.user_count || 0} Nutzer · {tenant.vehicle_count || 0} Fahrzeuge</p>
+                      </>
+                    )}
                   </div>
-                  <span className="text-xs text-gray-400">{formatDate(String(tenant.created_at || '').slice(0, 10))}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="text-xs rounded-md border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      onClick={() => setSelectedTenantId(tenant.id)}
+                    >
+                      Auswaehlen
+                    </button>
+                    {editingTenantId !== tenant.id && (
+                      <button
+                        className="text-xs rounded-md border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                        onClick={() => startTenantEdit(tenant)}
+                      >
+                        Aendern
+                      </button>
+                    )}
+                    <span className="text-xs text-gray-400">{formatDate(String(tenant.created_at || '').slice(0, 10))}</span>
+                  </div>
                 </div>
-              </button>
+              </div>
             ))}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+            <h3 className="font-semibold text-gray-900">Offene Admin-Anfragen</h3>
+            {adminRequests.length === 0 ? (
+              <p className="text-sm text-gray-500">Keine offenen Anfragen vorhanden.</p>
+            ) : (
+              adminRequests.map((request) => (
+                <div key={request.id} className="border border-gray-100 rounded-lg p-3">
+                  <p className="font-semibold text-sm text-gray-900">{request.name} ({request.email})</p>
+                  <p className="text-xs text-gray-500">Gewuenschter Tenant: {request.tenant_name}</p>
+                  {request.message ? <p className="text-xs text-gray-600 mt-1">{request.message}</p> : null}
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      className="btn-primary"
+                      disabled={requestProcessingId === request.id}
+                      onClick={() => approveAdminRequest(request)}
+                    >
+                      Annehmen
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      disabled={requestProcessingId === request.id}
+                      onClick={() => rejectAdminRequest(request)}
+                    >
+                      Ablehnen
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       ) : tab === 'users' ? (
