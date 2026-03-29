@@ -30,22 +30,33 @@ export async function authenticate(req, res, next) {
       return res.status(401).json({ error: 'Benutzer für dieses Token nicht gefunden. Bitte neu anmelden.' });
     }
 
+    const memberships = user.super_admin
+      ? []
+      : await db.queryMany(
+        'SELECT tenant_id, role FROM tenant_members WHERE user_id = ? ORDER BY created_at ASC, tenant_id ASC',
+        [user.id]
+      );
+
+    if (!user.super_admin && memberships.length > 1) {
+      return res.status(409).json({ error: 'Benutzer ist mehreren Mandanten zugeordnet. Bitte Superadmin kontaktieren.' });
+    }
+
     const requestedTenantId = payload.active_tenant_id ?? null;
     let tenantRole = null;
 
     if (requestedTenantId != null && !user.super_admin) {
-      const membership = await db.queryOne(
-        'SELECT role FROM tenant_members WHERE tenant_id = ? AND user_id = ?',
-        [requestedTenantId, user.id]
-      );
+      const membership = memberships.find((entry) => Number(entry.tenant_id) === Number(requestedTenantId));
       if (!membership) {
         return res.status(403).json({ error: 'Kein Zugriff auf diesen Mandanten' });
       }
       tenantRole = membership.role;
+    } else if (!user.super_admin && memberships.length === 1) {
+      req.tenantId = memberships[0].tenant_id;
+      tenantRole = memberships[0].role;
     }
 
     req.user = user;
-    req.tenantId = requestedTenantId;
+    req.tenantId = req.tenantId ?? requestedTenantId;
     req.tenantRole = tenantRole;
     next();
   } catch {

@@ -33,6 +33,23 @@ function getAccessibleTenants(user, memberships, activeTenantId) {
   return memberships.filter((membership) => Number(membership.id) === Number(activeTenantId));
 }
 
+function getDefaultActiveTenantId(user, memberships) {
+  if (!memberships.length) {
+    return null;
+  }
+
+  if (user?.super_admin) {
+    return memberships[0].id;
+  }
+
+  const adminMembership = memberships.find((membership) => membership.role === 'admin');
+  return adminMembership?.id ?? memberships[0].id;
+}
+
+function hasInvalidMultiTenantMembership(user, memberships) {
+  return !user?.super_admin && memberships.length > 1;
+}
+
 function buildTokenPayload({ id, role, superAdmin, activeTenantId }) {
   return {
     id,
@@ -91,8 +108,12 @@ router.post('/register', async (req, res) => {
     }
 
     const memberships = await getTenantMemberships(id);
+    if (hasInvalidMultiTenantMembership({ super_admin: superAdmin }, memberships)) {
+      return res.status(409).json({ error: 'Benutzer ist mehreren Mandanten zugeordnet. Bitte Superadmin kontaktieren.' });
+    }
+
     if (!activeTenantId && memberships.length > 0) {
-      activeTenantId = memberships[0].id;
+      activeTenantId = getDefaultActiveTenantId({ super_admin: superAdmin }, memberships);
     }
 
     const user = {
@@ -167,6 +188,10 @@ router.post('/register-with-invite', async (req, res) => {
     );
 
     const memberships = await getTenantMemberships(userId);
+    if (hasInvalidMultiTenantMembership({ super_admin: false }, memberships)) {
+      return res.status(409).json({ error: 'Benutzer ist mehreren Mandanten zugeordnet. Bitte Superadmin kontaktieren.' });
+    }
+
     const activeTenantId = invite.tenant_id;
     const user = {
       id: userId,
@@ -272,7 +297,11 @@ router.post('/login', async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'E-Mail-Adresse oder Passwort ist nicht korrekt.' });
 
     const memberships = await getTenantMemberships(row.id);
-    const activeTenantId = row.super_admin ? (memberships[0]?.id ?? null) : (memberships[0]?.id ?? null);
+    if (hasInvalidMultiTenantMembership({ super_admin: Boolean(row.super_admin) }, memberships)) {
+      return res.status(409).json({ error: 'Benutzer ist mehreren Mandanten zugeordnet. Bitte Superadmin kontaktieren.' });
+    }
+
+    const activeTenantId = getDefaultActiveTenantId({ super_admin: Boolean(row.super_admin) }, memberships);
     const user = {
       id: row.id,
       name: row.name,
