@@ -95,7 +95,7 @@ function buildBillingCsv(summary) {
 }
 
 function initialTab(isSuperAdmin) {
-  return isSuperAdmin ? 'tenants' : 'users';
+  return 'users';
 }
 
 const ALL_TENANTS_VALUE = 'all';
@@ -522,41 +522,6 @@ export default function Admin() {
     return <div className="p-4">Keine Berechtigung.</div>;
   }
 
-  // Super-Admin: Show only tenant management access
-  if (isSuperAdmin) {
-    return (
-      <div className="p-4 max-w-2xl">
-        <ToastContainer toasts={toasts} dismiss={dismiss} />
-
-        <div className="space-y-6 mt-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <ShieldCheck className="w-8 h-8 text-indigo-600" />
-              Super-Admin Panel
-            </h1>
-            <p className="text-gray-600">Verwalte alle Mandanten und deren Einstellungen</p>
-          </div>
-
-          <div
-            onClick={() => navigate('/admin/tenants')}
-            className="cursor-pointer bg-gradient-to-br from-indigo-50 to-indigo-100 border-2 border-indigo-300 rounded-xl p-6 hover:from-indigo-100 hover:to-indigo-200 hover:border-indigo-400 transition-all shadow-md hover:shadow-lg"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-indigo-600 rounded-lg text-white">
-                <Building2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Mandantenverwaltung</h2>
-                <p className="text-sm text-gray-700 mt-1">Anzeigen, bearbeiten und verwalten aller Mandanten und deren Mitglieder</p>
-              </div>
-              <ChevronLeft className="w-6 h-6 text-indigo-600 rotate-180 ml-auto" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 space-y-5">
       <ToastContainer toasts={toasts} dismiss={dismiss} />
@@ -605,16 +570,6 @@ export default function Admin() {
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-        {isSuperAdmin ? (
-          <button
-            onClick={() => setTab('tenants')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-              tab === 'tenants' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Mandanten
-          </button>
-        ) : null}
         <button
           onClick={() => setTab('users')}
           className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -636,105 +591,6 @@ export default function Admin() {
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => <div key={i} className="bg-gray-200 animate-pulse h-20 rounded-xl" />)}
-        </div>
-      ) : tab === 'tenants' && isSuperAdmin ? (
-        <div className="space-y-4">
-          <form onSubmit={createTenant} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2"><Building2 className="w-4 h-4" /> Neuen Mandanten erstellen</h2>
-            <input
-              className="input"
-              placeholder="Mandantenname"
-              value={newTenantForm.name}
-              onChange={(e) => setNewTenantForm((prev) => ({ ...prev, name: e.target.value }))}
-            />
-            <input
-              className="input"
-              placeholder="Erster Admin (E-Mail, optional)"
-              value={newTenantForm.first_admin_email}
-              onChange={(e) => setNewTenantForm((prev) => ({ ...prev, first_admin_email: e.target.value }))}
-            />
-            <button disabled={creatingTenant} className="btn-primary inline-flex items-center gap-1">
-              <Plus className="w-4 h-4" /> {creatingTenant ? 'Erstelle...' : 'Mandant erstellen'}
-            </button>
-          </form>
-
-          <div className="space-y-2">
-            {tenants.map((tenant) => (
-              <div
-                key={tenant.id}
-                className={`w-full text-left bg-white rounded-xl border shadow-sm p-4 ${selectedTenantId === tenant.id ? 'border-indigo-200 ring-2 ring-indigo-100' : 'border-gray-100'}`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    {editingTenantId === tenant.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          className="input"
-                          value={editingTenantName}
-                          onChange={(e) => setEditingTenantName(e.target.value)}
-                        />
-                        <button className="btn-primary" onClick={() => saveTenantEdit(tenant.id)}>Speichern</button>
-                        <button className="btn-secondary" onClick={() => setEditingTenantId(null)}>Abbrechen</button>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="font-semibold text-gray-900">{tenant.name}</p>
-                        <p className="text-xs text-gray-500">{tenant.user_count || 0} Nutzer · {tenant.vehicle_count || 0} Fahrzeuge</p>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="text-xs rounded-md border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                      onClick={() => setSelectedTenantId(tenant.id)}
-                    >
-                      Auswaehlen
-                    </button>
-                    {editingTenantId !== tenant.id && (
-                      <button
-                        className="text-xs rounded-md border border-gray-300 px-2 py-1 hover:bg-gray-50"
-                        onClick={() => startTenantEdit(tenant)}
-                      >
-                        Aendern
-                      </button>
-                    )}
-                    <span className="text-xs text-gray-400">{formatDate(String(tenant.created_at || '').slice(0, 10))}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-            <h3 className="font-semibold text-gray-900">Offene Admin-Anfragen</h3>
-            {adminRequests.length === 0 ? (
-              <p className="text-sm text-gray-500">Keine offenen Anfragen vorhanden.</p>
-            ) : (
-              adminRequests.map((request) => (
-                <div key={request.id} className="border border-gray-100 rounded-lg p-3">
-                  <p className="font-semibold text-sm text-gray-900">{request.name} ({request.email})</p>
-                  <p className="text-xs text-gray-500">Gewuenschter Tenant: {request.tenant_name}</p>
-                  {request.message ? <p className="text-xs text-gray-600 mt-1">{request.message}</p> : null}
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      className="btn-primary"
-                      disabled={requestProcessingId === request.id}
-                      onClick={() => approveAdminRequest(request)}
-                    >
-                      Annehmen
-                    </button>
-                    <button
-                      className="btn-secondary"
-                      disabled={requestProcessingId === request.id}
-                      onClick={() => rejectAdminRequest(request)}
-                    >
-                      Ablehnen
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
         </div>
       ) : tab === 'users' ? (
         <div className="space-y-4">

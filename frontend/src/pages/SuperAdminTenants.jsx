@@ -50,17 +50,27 @@ export default function SuperAdminTenants() {
   const loadTenantDetails = async (tenantId) => {
     try {
       setDetailLoading(true);
-      const [tenantResult, membersResult, vehiclesResult] = await Promise.all([
+      const [tenantResult, membersResult] = await Promise.all([
         api.get(`/tenants/${tenantId}`),
         api.get(`/admin/tenants/${tenantId}/members`),
-        api.get(`/tenants/${tenantId}/vehicles`),
       ]);
 
       setMembers(membersResult.members || []);
-      setVehicles(vehiclesResult || []);
       setEditedName(tenantResult.tenant.name);
+      
+      // Load vehicles for this tenant - filter tenant's vehicles
+      try {
+        const allVehicles = await api.get(`/vehicles`);
+        const tenantVehicles = (Array.isArray(allVehicles) ? allVehicles : [])
+          .filter(v => v && v.tenant_id === tenantId) || [];
+        setVehicles(tenantVehicles);
+      } catch {
+        // If vehicles endpoint fails, just show empty list
+        setVehicles([]);
+      }
     } catch (err) {
-      show({ type: 'error', message: 'Fehler beim Laden der Tenant-Details' });
+      show({ type: 'error', message: 'Fehler beim Laden der Tenant-Details: ' + (err?.message || err) });
+      console.error(err);
     } finally {
       setDetailLoading(false);
     }
