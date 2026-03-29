@@ -21,6 +21,18 @@ async function getTenantMemberships(userId) {
   );
 }
 
+function getAccessibleTenants(user, memberships, activeTenantId) {
+  if (user?.super_admin) {
+    return memberships;
+  }
+
+  if (!activeTenantId) {
+    return [];
+  }
+
+  return memberships.filter((membership) => Number(membership.id) === Number(activeTenantId));
+}
+
 function buildTokenPayload({ id, role, superAdmin, activeTenantId }) {
   return {
     id,
@@ -96,7 +108,7 @@ router.post('/register', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-    res.status(201).json({ token, user, available_tenants: memberships });
+    res.status(201).json({ token, user, available_tenants: getAccessibleTenants(user, memberships, activeTenantId) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Registrierung fehlgeschlagen' });
@@ -171,7 +183,7 @@ router.post('/register-with-invite', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    res.status(201).json({ token, user, available_tenants: memberships, tenant_name: invite.tenant_name });
+    res.status(201).json({ token, user, available_tenants: getAccessibleTenants(user, memberships, activeTenantId), tenant_name: invite.tenant_name });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Registrierung mit Einladung fehlgeschlagen' });
@@ -260,7 +272,7 @@ router.post('/login', async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'E-Mail-Adresse oder Passwort ist nicht korrekt.' });
 
     const memberships = await getTenantMemberships(row.id);
-    const activeTenantId = memberships[0]?.id ?? null;
+    const activeTenantId = row.super_admin ? (memberships[0]?.id ?? null) : (memberships[0]?.id ?? null);
     const user = {
       id: row.id,
       name: row.name,
@@ -279,7 +291,7 @@ router.post('/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-    res.json({ token, user, available_tenants: memberships });
+    res.json({ token, user, available_tenants: getAccessibleTenants(user, memberships, activeTenantId) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login fehlgeschlagen' });
@@ -288,23 +300,24 @@ router.post('/login', async (req, res) => {
 
 router.post('/switch-tenant/:tenantId', authenticate, async (req, res) => {
   try {
-    const tenantId = Number(req.params.tenantId);
-    if (!Number.isInteger(tenantId) || tenantId <= 0) {
-      return res.status(400).json({ error: 'Ungültige Mandanten-ID' });
-    }
-
-    const tenant = await db.queryOne('SELECT id, name FROM tenants WHERE id = ?', [tenantId]);
-    if (!tenant) {
-      return res.status(404).json({ error: 'Mandant nicht gefunden' });
-    }
-
     if (!req.user.super_admin) {
-      const membership = await db.queryOne(
-        'SELECT role FROM tenant_members WHERE tenant_id = ? AND user_id = ?',
-        [tenantId, req.user.id]
-      );
-      if (!membership) {
-        return res.status(403).json({ error: 'Kein Zugriff auf diesen Mandanten' });
+      return res.status(403).json({ error: 'Nur Super-Admins duerfen den Mandanten wechseln' });
+    }
+
+    const requestedTenant = String(req.params.tenantId);
+    const wantsAllTenants = requestedTenant === 'all';
+    let tenantId = null;
+    let tenant = null;
+
+    if (!wantsAllTenants) {
+      tenantId = Number(requestedTenant);
+      if (!Number.isInteger(tenantId) || tenantId <= 0) {
+        return res.status(400).json({ error: 'Ungültige Mandanten-ID' });
+      }
+
+      tenant = await db.queryOne('SELECT id, name FROM tenants WHERE id = ?', [tenantId]);
+      if (!tenant) {
+        return res.status(404).json({ error: 'Mandant nicht gefunden' });
       }
     }
 

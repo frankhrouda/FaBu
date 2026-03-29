@@ -14,7 +14,6 @@ export function AuthProvider({ children }) {
     const tenantRole = activeTenant?.role || null;
     const isAdmin = Boolean(
       nextUser?.super_admin ||
-      nextUser?.role === 'admin' ||
       tenantRole === 'admin'
     );
 
@@ -54,9 +53,14 @@ export function AuthProvider({ children }) {
   };
 
   const switchTenant = async (tenantId) => {
+    if (!user?.super_admin) {
+      throw new Error('Nur Super-Admins duerfen den Mandanten wechseln');
+    }
+
     setSwitchingTenant(true);
     try {
-      const response = await fetch(`/api/auth/switch-tenant/${tenantId}`, {
+      const tenantTarget = tenantId == null ? 'all' : tenantId;
+      const response = await fetch(`/api/auth/switch-tenant/${tenantTarget}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

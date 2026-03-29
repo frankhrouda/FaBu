@@ -18,7 +18,7 @@ function requireTenantContext(req, res, { allowSuperAdminWithoutTenant = false }
 router.get('/', authenticate, async (req, res) => {
   if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
   try {
-    const isAdmin = req.user.role === 'admin' || req.user.super_admin || req.tenantRole === 'admin';
+    const isAdmin = req.user.super_admin || req.tenantRole === 'admin';
     const vehicles = req.user.super_admin && !req.tenantId
       ? await db.queryMany('SELECT * FROM vehicles ORDER BY active DESC, name', [])
       : isAdmin

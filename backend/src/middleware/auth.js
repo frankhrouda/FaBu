@@ -54,10 +54,9 @@ export async function authenticate(req, res, next) {
 }
 
 export function requireAdmin(req, res, next) {
-  const isLegacyAdmin = req.user?.role === 'admin';
   const isSuperAdmin = Boolean(req.user?.super_admin);
   const isTenantAdmin = req.tenantRole === 'admin';
-  if (!isLegacyAdmin && !isSuperAdmin && !isTenantAdmin) {
+  if (!isSuperAdmin && !isTenantAdmin) {
     return res.status(403).json({ error: 'Administratorrechte erforderlich' });
   }
   next();
@@ -80,6 +79,10 @@ export async function requireTenantAccess(req, res, next) {
     req.tenantId = tenantId;
     req.tenantRole = req.tenantRole ?? 'admin';
     return next();
+  }
+
+  if (Number(req.tenantId) !== tenantId) {
+    return res.status(403).json({ error: 'Kein Zugriff auf diesen Mandanten' });
   }
 
   const membership = await db.queryOne(
@@ -106,6 +109,10 @@ export async function requireTenantAdmin(req, res, next) {
     req.tenantId = tenantId;
     req.tenantRole = 'admin';
     return next();
+  }
+
+  if (Number(req.tenantId) !== tenantId) {
+    return res.status(403).json({ error: 'Administratorrechte fuer diesen Mandanten erforderlich' });
   }
 
   const membership = await db.queryOne(

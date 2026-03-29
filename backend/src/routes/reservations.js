@@ -26,7 +26,7 @@ const WITH_DETAILS = `
 router.get('/', authenticate, async (req, res) => {
   if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
   try {
-    const isAdmin = req.user.role === 'admin' || req.user.super_admin || req.tenantRole === 'admin';
+    const isAdmin = req.user.super_admin || req.tenantRole === 'admin';
     const reservations = req.user.super_admin && !req.tenantId
       ? await db.queryMany(`${WITH_DETAILS} ORDER BY r.date DESC, r.time_from DESC`, [])
       : isAdmin
@@ -137,7 +137,7 @@ router.patch('/:id/complete', authenticate, async (req, res) => {
     );
     if (!reservation) return res.status(404).json({ error: 'Reservierung nicht gefunden' });
 
-    if (reservation.user_id !== req.user.id && req.user.role !== 'admin' && req.tenantRole !== 'admin' && !req.user.super_admin) {
+    if (reservation.user_id !== req.user.id && req.tenantRole !== 'admin' && !req.user.super_admin) {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     if (reservation.status !== 'reserved') {
@@ -169,7 +169,7 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
     );
     if (!reservation) return res.status(404).json({ error: 'Reservierung nicht gefunden' });
 
-    if (reservation.user_id !== req.user.id && req.user.role !== 'admin' && req.tenantRole !== 'admin' && !req.user.super_admin) {
+    if (reservation.user_id !== req.user.id && req.tenantRole !== 'admin' && !req.user.super_admin) {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     if (reservation.status !== 'reserved') {

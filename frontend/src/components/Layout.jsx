@@ -4,7 +4,7 @@ import BottomNav from './BottomNav';
 import { Car, LogOut } from 'lucide-react';
 
 export default function Layout() {
-  const { user, logout, isAdmin, availableTenants, activeTenantId, switchTenant, switchingTenant } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -23,21 +23,6 @@ export default function Layout() {
                 <span className="ml-1 text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">Admin</span>
               )}
             </div>
-            {availableTenants.length > 1 && (
-              <select
-                value={activeTenantId || ''}
-                onChange={(e) => switchTenant(Number(e.target.value))}
-                disabled={switchingTenant}
-                className="max-w-[140px] text-xs text-indigo-900 bg-white/90 rounded-md px-2 py-1"
-                title="Mandant wechseln"
-              >
-                {availableTenants.map((tenant) => (
-                  <option key={tenant.id} value={tenant.id}>
-                    {tenant.name}
-                  </option>
-                ))}
-              </select>
-            )}
             <button
               onClick={() => { logout(); navigate('/login'); }}
               className="p-1 rounded-full bg-indigo-500 hover:bg-indigo-400 transition-colors"

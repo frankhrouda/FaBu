@@ -96,6 +96,8 @@ function initialTab(isSuperAdmin) {
   return isSuperAdmin ? 'tenants' : 'users';
 }
 
+const ALL_TENANTS_VALUE = 'all';
+
 export default function Admin() {
   const {
     user: me,
@@ -111,7 +113,9 @@ export default function Admin() {
 
   const [tab, setTab] = useState(initialTab(isSuperAdmin));
   const [tenants, setTenants] = useState([]);
-  const [selectedTenantId, setSelectedTenantId] = useState(activeTenantId ?? null);
+  const [selectedTenantId, setSelectedTenantId] = useState(
+    isSuperAdmin ? (activeTenantId ?? ALL_TENANTS_VALUE) : (activeTenantId ?? null)
+  );
   const [members, setMembers] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -133,15 +137,17 @@ export default function Admin() {
   const [adminRequests, setAdminRequests] = useState([]);
   const [requestProcessingId, setRequestProcessingId] = useState(null);
 
-  const effectiveTenantId = selectedTenantId ?? activeTenantId ?? null;
+  const effectiveTenantId = selectedTenantId === ALL_TENANTS_VALUE
+    ? null
+    : (selectedTenantId ?? activeTenantId ?? null);
 
   const loadTenants = async () => {
     if (isSuperAdmin) {
       const result = await api.get('/admin/tenants');
       const tenantItems = result.tenants || [];
       setTenants(tenantItems);
-      if (!selectedTenantId && tenantItems[0]?.id) {
-        setSelectedTenantId(tenantItems[0].id);
+      if (selectedTenantId == null) {
+        setSelectedTenantId(activeTenantId ?? ALL_TENANTS_VALUE);
       }
       return;
     }
@@ -155,6 +161,11 @@ export default function Admin() {
 
   const loadMembers = async (tenantId) => {
     if (!tenantId) {
+      if (isSuperAdmin) {
+        const result = await api.get('/users');
+        setMembers(result || []);
+        return;
+      }
       setMembers([]);
       return;
     }
@@ -203,21 +214,22 @@ export default function Admin() {
 
   useEffect(() => {
     setTab(initialTab(isSuperAdmin));
-  }, [isSuperAdmin]);
+    setSelectedTenantId(isSuperAdmin ? (activeTenantId ?? ALL_TENANTS_VALUE) : (activeTenantId ?? null));
+  }, [isSuperAdmin, activeTenantId]);
 
   useEffect(() => {
     void loadAll();
   }, [isSuperAdmin]);
 
   useEffect(() => {
-    if (!effectiveTenantId) return;
-
     const sync = async () => {
       try {
+        setSelectedUser(null);
+        setKmSummary(null);
         if (isSuperAdmin && activeTenantId !== effectiveTenantId) {
           await switchTenant(effectiveTenantId);
         }
-        await Promise.all([loadMembers(effectiveTenantId), loadInvitations(effectiveTenantId)]);
+        await Promise.all([loadReservations(), loadMembers(effectiveTenantId), loadInvitations(effectiveTenantId)]);
       } catch (err) {
         show(err.message, 'error');
       }
@@ -327,7 +339,7 @@ export default function Admin() {
       const requestResult = await api.get('/admin/tenant-admin-requests?status=pending');
       setAdminRequests(requestResult.requests || []);
       await loadTenants();
-      if (!selectedTenantId) {
+      if (!selectedTenantId || selectedTenantId === ALL_TENANTS_VALUE) {
         const refreshed = await api.get('/admin/tenants');
         const firstTenant = refreshed.tenants?.[0];
         if (firstTenant?.id) setSelectedTenantId(firstTenant.id);
@@ -518,7 +530,7 @@ export default function Admin() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Benutzer" value={stats.totalUsers} sub="im Mandant" color="indigo" />
+        <StatCard label="Benutzer" value={stats.totalUsers} sub={effectiveTenantId ? 'im Mandant' : 'gesamt sichtbar'} color="indigo" />
         <StatCard label="Fahrten gesamt" value={stats.totalReservations} sub="sichtbar" color="blue" />
         <StatCard label="Abgeschlossen" value={stats.completedTrips} sub="Fahrten" color="emerald" />
         <StatCard label="Kilometer" value={formatKm(stats.totalKm)} sub="gesamt gefahren" color="amber" />
@@ -526,16 +538,21 @@ export default function Admin() {
 
       <div className="space-y-2">
         <label className="text-xs text-gray-500">Aktiver Mandant</label>
-        <select
-          className="input"
-          value={effectiveTenantId || ''}
-          onChange={(e) => setSelectedTenantId(Number(e.target.value))}
-          disabled={switchingTenant || tenants.length === 0}
-        >
-          {tenants.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
+        {isSuperAdmin ? (
+          <select
+            className="input"
+            value={selectedTenantId ?? ALL_TENANTS_VALUE}
+            onChange={(e) => setSelectedTenantId(e.target.value === ALL_TENANTS_VALUE ? ALL_TENANTS_VALUE : Number(e.target.value))}
+            disabled={switchingTenant}
+          >
+            <option value={ALL_TENANTS_VALUE}>Alle Mandanten</option>
+            {tenants.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="input bg-gray-50 text-gray-700">{tenants.find((tenant) => tenant.id === effectiveTenantId)?.name || tenants[0]?.name || 'Kein Mandant zugewiesen'}</div>
+        )}
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
@@ -672,47 +689,58 @@ export default function Admin() {
         </div>
       ) : tab === 'users' ? (
         <div className="space-y-4">
-          <form onSubmit={createInvitation} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Einladungscode erstellen</h2>
-            <input
-              className="input"
-              placeholder="E-Mail (optional)"
-              value={inviteForm.email}
-              onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
-            />
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-500">Gueltig (Stunden)</label>
-              <input
-                type="number"
-                min="1"
-                className="input w-24"
-                value={inviteForm.expires_in_hours}
-                onChange={(e) => setInviteForm((prev) => ({ ...prev, expires_in_hours: Number(e.target.value || 24) }))}
-              />
+          {!effectiveTenantId ? (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-sm text-gray-600">
+              Gesamtansicht aktiv. Benutzer sind sichtbar, aber Aenderungen und Einladungen sind nur in einem konkreten Mandanten moeglich.
             </div>
-            <button disabled={creatingInvite || !effectiveTenantId} className="btn-primary inline-flex items-center gap-1">
-              <Plus className="w-4 h-4" /> {creatingInvite ? 'Erstelle...' : 'Einladung erstellen'}
-            </button>
+          ) : null}
+          {effectiveTenantId ? (
+              <form onSubmit={createInvitation} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Einladungscode erstellen</h2>
+                <input
+                  className="input"
+                  placeholder="E-Mail (optional)"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
+                />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500">Gueltig (Stunden)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="input w-24"
+                    value={inviteForm.expires_in_hours}
+                    onChange={(e) => setInviteForm((prev) => ({ ...prev, expires_in_hours: Number(e.target.value || 24) }))}
+                  />
+                </div>
+                <button disabled={creatingInvite || !effectiveTenantId} className="btn-primary inline-flex items-center gap-1">
+                  <Plus className="w-4 h-4" /> {creatingInvite ? 'Erstelle...' : 'Einladung erstellen'}
+                </button>
 
-            {invitations.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {invitations.slice(0, 5).map((inv) => (
-                  <div key={inv.id} className="text-xs text-gray-600 border border-gray-100 rounded-lg px-2 py-1.5">
-                    <span className="font-mono text-gray-900">{inv.code}</span>
-                    {' · '}
-                    {inv.email || 'ohne E-Mail-Bindung'}
-                    {' · bis '}
-                    {formatDate(String(inv.expires_at).slice(0, 10))}
-                    {inv.used_at ? ' · verwendet' : ''}
+                {invitations.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {invitations.slice(0, 5).map((inv) => (
+                      <div key={inv.id} className="text-xs text-gray-600 border border-gray-100 rounded-lg px-2 py-1.5">
+                        <span className="font-mono text-gray-900">{inv.code}</span>
+                        {' · '}
+                        {inv.email || 'ohne E-Mail-Bindung'}
+                        {' · bis '}
+                        {formatDate(String(inv.expires_at).slice(0, 10))}
+                        {inv.used_at ? ' · verwendet' : ''}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-          </form>
+                )}
+              </form>
+          ) : null}
 
           <div className="space-y-3">
-            {members.map((u) => {
-              const role = u.tenant_role || u.role;
+            {members.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-sm text-gray-500">
+                Keine Benutzer vorhanden.
+              </div>
+            ) : members.map((u) => {
+              const role = u.tenant_role || (u.super_admin ? 'admin' : u.role);
               return (
                 <div
                   key={u.id}
@@ -743,7 +771,7 @@ export default function Admin() {
                       <p className="text-xs text-gray-500 truncate">{u.email}</p>
                       <p className="text-xs text-gray-400">Seit {formatDate(String(u.created_at || u.joined_at || '').slice(0, 10))}</p>
                     </button>
-                    {u.id !== me?.id && (
+                    {u.id !== me?.id && effectiveTenantId ? (
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => changeRole(u.id, role)}
@@ -764,7 +792,7 @@ export default function Admin() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );

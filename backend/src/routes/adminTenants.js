@@ -65,11 +65,21 @@ router.post('/tenants', authenticate, requireSuperAdmin, async (req, res) => {
 
     if (first_admin_email) {
       const adminUser = await db.queryOne(
-        'SELECT id FROM users WHERE LOWER(email) = ?',
+        'SELECT id, super_admin FROM users WHERE LOWER(email) = ?',
         [String(first_admin_email).trim().toLowerCase()]
       );
       if (!adminUser) {
         return res.status(404).json({ error: 'Benutzer fuer first_admin_email nicht gefunden' });
+      }
+
+      if (!adminUser.super_admin) {
+        const existingMembership = await db.queryOne(
+          'SELECT tenant_id FROM tenant_members WHERE user_id = ? LIMIT 1',
+          [adminUser.id]
+        );
+        if (existingMembership) {
+          return res.status(409).json({ error: 'Benutzer ist bereits einem anderen Mandanten zugeordnet' });
+        }
       }
 
       await db.execute(
@@ -189,7 +199,7 @@ router.post('/tenant-admin-requests/:requestId/approve', authenticate, requireSu
       tenant = await db.queryOne('SELECT id, name FROM tenants WHERE id = ?', [tenantId]);
     }
 
-    let user = await db.queryOne('SELECT id, email FROM users WHERE LOWER(email) = ?', [String(request.email).toLowerCase()]);
+    let user = await db.queryOne('SELECT id, email, super_admin FROM users WHERE LOWER(email) = ?', [String(request.email).toLowerCase()]);
     if (!user) {
       if (!request.password_hash) {
         return res.status(409).json({ error: 'Antragsteller hat kein Konto und kein Passwort hinterlegt' });
@@ -200,7 +210,15 @@ router.post('/tenant-admin-requests/:requestId/approve', authenticate, requireSu
         [request.name, String(request.email).toLowerCase(), request.password_hash, 'user', 0]
       );
       const userId = createdUser.row?.id ?? createdUser.lastInsertId;
-      user = await db.queryOne('SELECT id, email FROM users WHERE id = ?', [userId]);
+      user = await db.queryOne('SELECT id, email, super_admin FROM users WHERE id = ?', [userId]);
+    } else if (!user.super_admin) {
+      const existingMembership = await db.queryOne(
+        'SELECT tenant_id FROM tenant_members WHERE user_id = ? AND tenant_id != ? LIMIT 1',
+        [user.id, tenant.id]
+      );
+      if (existingMembership) {
+        return res.status(409).json({ error: 'Benutzer ist bereits einem anderen Mandanten zugeordnet' });
+      }
     }
 
     await db.execute(
