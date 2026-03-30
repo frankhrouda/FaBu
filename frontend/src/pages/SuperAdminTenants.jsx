@@ -30,6 +30,13 @@ export default function SuperAdminTenants() {
   const [savingName, setSavingName] = useState(false);
   const [updatingUserRole, setUpdatingUserRole] = useState(null);
   const [removingMemberId, setRemovingMemberId] = useState(null);
+  const [creatingMember, setCreatingMember] = useState(false);
+  const [newMemberForm, setNewMemberForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'user',
+  });
 
   // Load all tenants
   useEffect(() => {
@@ -144,6 +151,32 @@ export default function SuperAdminTenants() {
       show({ type: 'error', message: err.message || 'Fehler beim Entfernen des Mitglieds' });
     } finally {
       setRemovingMemberId(null);
+    }
+  };
+
+  const handleCreateMember = async (e) => {
+    e.preventDefault();
+    if (!selectedTenant?.id) {
+      return;
+    }
+
+    try {
+      setCreatingMember(true);
+      const payload = {
+        name: newMemberForm.name.trim(),
+        email: newMemberForm.email.trim(),
+        password: newMemberForm.password,
+        role: newMemberForm.role,
+      };
+      const result = await api.post(`/admin/tenants/${selectedTenant.id}/members`, payload);
+      setMembers((prev) => [...prev, result.user]);
+      setNewMemberForm({ name: '', email: '', password: '', role: 'user' });
+      show({ type: 'success', message: 'Benutzer wurde angelegt' });
+      await loadTenants();
+    } catch (err) {
+      show({ type: 'error', message: err.message || 'Fehler beim Anlegen des Benutzers' });
+    } finally {
+      setCreatingMember(false);
     }
   };
 
@@ -281,6 +314,54 @@ export default function SuperAdminTenants() {
 
               {/* Members Section */}
               <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  Neuen Benutzer anlegen
+                </h3>
+
+                <form onSubmit={handleCreateMember} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+                  <input
+                    type="text"
+                    value={newMemberForm.name}
+                    onChange={(e) => setNewMemberForm((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="Name"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                  <input
+                    type="email"
+                    value={newMemberForm.email}
+                    onChange={(e) => setNewMemberForm((prev) => ({ ...prev, email: e.target.value }))}
+                    placeholder="E-Mail"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                  <input
+                    type="password"
+                    value={newMemberForm.password}
+                    onChange={(e) => setNewMemberForm((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="Passwort (mind. 6 Zeichen)"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    minLength={6}
+                    required
+                  />
+                  <select
+                    value={newMemberForm.role}
+                    onChange={(e) => setNewMemberForm((prev) => ({ ...prev, role: e.target.value }))}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="user">Benutzer</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={creatingMember}
+                    className="md:col-span-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  >
+                    {creatingMember ? 'Lege an...' : 'Benutzer anlegen'}
+                  </button>
+                </form>
+
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                   <Users className="w-5 h-5" />
                   Mitglieder

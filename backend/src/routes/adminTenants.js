@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { db } from '../db/client.js';
 import { authenticate, requireSuperAdmin } from '../middleware/auth.js';
 
@@ -316,6 +317,65 @@ router.get('/tenants/:tenantId/members', authenticate, requireSuperAdmin, async 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Fehler beim Laden der Mandantenmitglieder' });
+  }
+});
+
+router.post('/tenants/:tenantId/members', authenticate, requireSuperAdmin, async (req, res) => {
+  const tenantId = Number(req.params.tenantId);
+  const { name, email, password, role } = req.body || {};
+
+  if (!Number.isInteger(tenantId) || tenantId <= 0) {
+    return res.status(400).json({ error: 'Ungueltige Mandanten-ID' });
+  }
+
+  const normalizedName = String(name || '').trim();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const rawPassword = String(password || '');
+  const tenantRole = role === 'admin' ? 'admin' : 'user';
+
+  if (!normalizedName || !normalizedEmail || !rawPassword) {
+    return res.status(400).json({ error: 'Name, E-Mail und Passwort sind erforderlich' });
+  }
+
+  if (rawPassword.length < 6) {
+    return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen haben' });
+  }
+
+  try {
+    const tenant = await db.queryOne('SELECT id, name FROM tenants WHERE id = ?', [tenantId]);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Mandant nicht gefunden' });
+    }
+
+    const existingUser = await db.queryOne('SELECT id FROM users WHERE LOWER(email) = ?', [normalizedEmail]);
+    if (existingUser) {
+      return res.status(409).json({ error: 'E-Mail bereits registriert' });
+    }
+
+    const passwordHash = await bcrypt.hash(rawPassword, 10);
+    const insertedUser = await db.execute(
+      'INSERT INTO users (name, email, password, role, super_admin) VALUES (?, ?, ?, ?, ?) RETURNING id',
+      [normalizedName, normalizedEmail, passwordHash, 'user', 0]
+    );
+    const userId = insertedUser.row?.id ?? insertedUser.lastInsertId;
+
+    await db.execute(
+      'INSERT INTO tenant_members (tenant_id, user_id, role) VALUES (?, ?, ?) RETURNING id',
+      [tenantId, userId, tenantRole]
+    );
+
+    const created = await db.queryOne(
+      `SELECT u.id, u.name, u.email, u.super_admin, tm.role AS tenant_role, tm.created_at AS joined_at
+       FROM tenant_members tm
+       JOIN users u ON u.id = tm.user_id
+       WHERE tm.tenant_id = ? AND tm.user_id = ?`,
+      [tenantId, userId]
+    );
+
+    res.status(201).json({ success: true, user: created, tenant: { id: tenant.id, name: tenant.name } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Anlegen des Benutzers' });
   }
 });
 
