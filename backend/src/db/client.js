@@ -277,8 +277,6 @@ const PG_SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_res_vehicle_date ON reservations(vehicle_id, date);
   CREATE INDEX IF NOT EXISTS idx_res_user ON reservations(user_id);
-  CREATE INDEX IF NOT EXISTS idx_vehicles_tenant_id ON vehicles(tenant_id);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_tenant_license_plate_unique ON vehicles(tenant_id, license_plate);
   CREATE INDEX IF NOT EXISTS idx_tenant_members_tenant_user ON tenant_members(tenant_id, user_id);
   CREATE INDEX IF NOT EXISTS idx_invitation_codes_code ON invitation_codes(code);
   CREATE INDEX IF NOT EXISTS idx_tenant_admin_requests_status ON tenant_admin_requests(status);
@@ -320,6 +318,8 @@ async function ensurePgMigrations() {
 
   await getPool().query('UPDATE vehicles SET tenant_id = $1 WHERE tenant_id IS NULL', [tenantId]);
   await getPool().query("UPDATE users SET super_admin = TRUE WHERE role = 'admin' AND id = $1", [firstUser.id]);
+
+  await getPool().query('CREATE INDEX IF NOT EXISTS idx_vehicles_tenant_id ON vehicles(tenant_id)');
 
   // Legacy migration: remove global unique constraint on license_plate and enforce per-tenant uniqueness.
   await getPool().query(`
