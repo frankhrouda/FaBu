@@ -29,6 +29,7 @@ export default function SuperAdminTenants() {
   const [editedName, setEditedName] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [updatingUserRole, setUpdatingUserRole] = useState(null);
+  const [removingMemberId, setRemovingMemberId] = useState(null);
 
   // Load all tenants
   useEffect(() => {
@@ -118,6 +119,31 @@ export default function SuperAdminTenants() {
       show({ type: 'error', message: err.message || 'Fehler beim Aktualisieren der Rolle' });
     } finally {
       setUpdatingUserRole(null);
+    }
+  };
+
+  const handleRemoveMember = async (member) => {
+    if (!selectedTenant?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Mitglied ${member.name} (${member.email}) aus dem Mandanten "${selectedTenant.name}" entfernen?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRemovingMemberId(member.id);
+      await api.delete(`/tenants/${selectedTenant.id}/members/${member.id}`);
+      setMembers((prev) => prev.filter((m) => m.id !== member.id));
+      show({ type: 'success', message: 'Mitglied wurde entfernt' });
+      await loadTenants();
+    } catch (err) {
+      show({ type: 'error', message: err.message || 'Fehler beim Entfernen des Mitglieds' });
+    } finally {
+      setRemovingMemberId(null);
     }
   };
 
@@ -293,6 +319,15 @@ export default function SuperAdminTenants() {
                               Benutzer
                             </button>
                           )}
+                          <button
+                            onClick={() => handleRemoveMember(member)}
+                            disabled={removingMemberId === member.id || updatingUserRole === member.id}
+                            className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 disabled:opacity-50 transition-colors flex items-center gap-1"
+                            title="Mitglied aus Mandant entfernen"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Entfernen
+                          </button>
                         </div>
                       </div>
                     ))}
