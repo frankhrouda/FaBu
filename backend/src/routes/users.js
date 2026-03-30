@@ -103,6 +103,12 @@ router.get('/:id/km-summary', authenticate, requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     }
 
+    const hasTenantFilter = Number.isInteger(Number(req.tenantId)) && Number(req.tenantId) > 0;
+    const tenantFilterSql = hasTenantFilter ? 'AND v.tenant_id = ?' : '';
+    const byVehicleParams = hasTenantFilter
+      ? [userId, Number(req.tenantId), from, to]
+      : [userId, from, to];
+
     const byVehicle = await db.queryMany(`
       SELECT
         v.id as vehicle_id,
@@ -115,14 +121,18 @@ router.get('/:id/km-summary', authenticate, requireAdmin, async (req, res) => {
       FROM reservations r
       JOIN vehicles v ON v.id = r.vehicle_id
       WHERE r.user_id = ?
-        AND (? IS NULL OR v.tenant_id = ?)
+        ${tenantFilterSql}
         AND r.status = 'completed'
         AND r.km_driven IS NOT NULL
         AND r.date >= ?
         AND r.date <= ?
       GROUP BY v.id, v.name, v.license_plate, v.price_per_km, v.flat_fee
       ORDER BY total_km DESC, trips DESC, v.name ASC
-    `, [userId, req.tenantId, req.tenantId, from, to]);
+    `, byVehicleParams);
+
+    const totalsParams = hasTenantFilter
+      ? [userId, Number(req.tenantId), from, to]
+      : [userId, from, to];
 
     const totals = await db.queryOne(`
       SELECT
@@ -131,12 +141,12 @@ router.get('/:id/km-summary', authenticate, requireAdmin, async (req, res) => {
       FROM reservations r
       JOIN vehicles v ON v.id = r.vehicle_id
       WHERE r.user_id = ?
-        AND (? IS NULL OR v.tenant_id = ?)
+        ${tenantFilterSql}
         AND r.status = 'completed'
         AND r.km_driven IS NOT NULL
         AND r.date >= ?
         AND r.date <= ?
-    `, [userId, req.tenantId, req.tenantId, from, to]);
+    `, totalsParams);
 
     const withCosts = byVehicle.map((entry) => {
       const trips = Number(entry.trips) || 0;
