@@ -2,7 +2,19 @@
 
 **Gültig für:** SQLite & PostgreSQL  
 **Version:** 1.0  
-**Status:** DESIGN
+**Status:** Referenzdokument mit historischen Designanteilen
+
+## Hinweis zum aktuellen Stand
+
+Dieses Dokument enthält die Zielstruktur und viele weiterhin gültige Schemaentscheidungen.
+Der produktive Ist-Stand ist jedoch weiterentwickelt.
+
+Wichtige reale Ergänzungen aus der Umsetzung:
+- `vehicles.license_plate` ist tenant-spezifisch eindeutig, nicht global eindeutig
+- `vehicles.tenant_id` musste in Legacy-Produktionsdatenbanken nachgezogen werden
+- Postgres-spezifische Index-Erzeugung für tenant-abhängige Vehicle-Indizes erfolgt robust im Migrationspfad
+
+Für die tatsächlich gültige Struktur gilt im Zweifel `backend/src/db/client.js` als Source of Truth.
 
 ---
 

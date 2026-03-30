@@ -1,9 +1,23 @@
 # 📑 Multi-Tenant Projekt – Dokumentations-Übersicht
 
 **Projekt:** FaBu Mandantenfähigkeit  
-**Status:** Planungsphase – Bereit für Umsetzung  
+**Status:** Implementiert und produktiv im Einsatz  
 **Erstellungsdatum:** März 2026  
-**Zielfreigabe:** Ende Juni 2026 (Q2)
+**Letzte Aktualisierung:** 30. März 2026
+
+## Hinweis zum aktuellen Stand
+
+Diese Dokumentensammlung wurde ursprünglich als Planungs- und Migrationspaket erstellt.
+Die Mandantenfähigkeit ist inzwischen produktiv umgesetzt.
+
+Aktuell realisiert:
+- Tenant-Isolation im Backend
+- Superadmin-Flow und separate Mandantenverwaltung
+- Tenant-gebundene Admin-Rechte
+- Tenant-spezifische Kennzeichen-Eindeutigkeit
+- Produktionsbetrieb auf PostgreSQL
+
+Diese Datei dient daher heute eher als Überblick und Referenzhistorie als als reine Projektplanung.
 
 ---
 
@@ -308,15 +322,15 @@ A: Nein, API-Breaking-Changes. Clients müssen upgradet werden.
 
 ---
 
-**FINAL STATUS:** ✅ BEREIT ZUR REVIEWFREIGABE
+**FINAL STATUS:** ✅ HISTORISCHER PLANUNGSSTAND, NICHT MEHR ALLEINIGE SOURCE OF TRUTH
 
-Alle 4 Dokumente sind vollständig, konsistent und produktionsbereit. 
+Die Umsetzung ist erfolgt, aber nicht jedes Detaildokument in diesem Paket bildet den produktiven Ist-Stand vollständig ab.
 
-**Nächster Schritt:** 
-1. Projekt-Kickoff mit Tech-Team
-2. Ressourcen-Planung
-3. Sprints Setup (Phase 1–3 für Sprint 1–2)
-4. GitHub Issues/Tasks erstellen basierend auf Phases
+**Maßgeblich für den aktuellen Betrieb sind vor allem:**
+1. `README.md`
+2. `SERVER_DEPLOYMENT_CHECKLIST.md`
+3. `PROD_MIGRATION_CHECKLIST.md`
+4. Der tatsächliche Code in `backend/src` und `frontend/src`
 
 ---
 

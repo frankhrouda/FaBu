@@ -1,8 +1,19 @@
 # Multi-Tenant Sicherheit & Testing Checklist
 
-**Status:** CRITICAL - Durchlesen vor Implementation!  
+**Status:** Weiterhin relevant, aber nicht mehr nur vor Implementation  
 **Version:** 1.0  
 **Erstellt:** März 2026
+
+## Hinweis zum aktuellen Stand
+
+Die Multi-Tenant-Funktionalität ist bereits implementiert und produktiv im Einsatz.
+Diese Datei ist daher heute vor allem als Review-, Regression- und Audit-Checkliste zu verstehen.
+
+Besonders relevant nach der Umsetzung:
+- Tenant-Isolation bei allen Reads/Writes weiter regressionssicher halten
+- Superadmin-Only-Flows separat testen
+- Produktionsnahe Tests für PostgreSQL statt nur SQLite berücksichtigen
+- Admin-/Superadmin-Mutationen auf Nebeneffekte und Datenkonsistenz prüfen
 
 ---
 

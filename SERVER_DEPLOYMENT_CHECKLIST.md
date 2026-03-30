@@ -1,5 +1,12 @@
 # FaBu Server-Deployment Checkliste
 
+## Aktueller Ist-Stand
+
+- Produktion ist live auf `app.fabu-online.de`
+- Backend läuft produktiv mit PM2 und PostgreSQL
+- Landing läuft getrennt unter `fabu-online.de`
+- Diese Checkliste ist weiterhin für Neuaufbau und Verifikation gedacht, nicht als reiner Statusreport
+
 ## 1. Host-Vorbereitung (einmalig)
 - [ ] VPS mit Ubuntu 24.04 + SSH-Key Setup
 - [ ] `./install-server.sh` ausführen (Node.js, Nginx, PM2, Certbot, etc.)
@@ -94,7 +101,7 @@ curl -I https://www.fabu-online.de
 curl -I https://app.fabu-online.de
 
 # API
-curl https://app.fabu-online.de/api/auth/login
+curl -X POST https://app.fabu-online.de/api/auth/login -H 'Content-Type: application/json' -d '{}'
 ```
 
 - [ ] Alle URLs erreichbar
@@ -128,6 +135,13 @@ sudo nginx -t && sudo systemctl reload nginx
 **Deployment wiederholen:**
 ```bash
 cd /home/deploy/FaBu && git pull && ./deploy-prod.sh
+```
+
+**Wichtiger Post-Deploy-Check:**
+```bash
+pm2 restart fabu-backend
+curl -X POST https://app.fabu-online.de/api/auth/login -H 'Content-Type: application/json' -d '{}'
+pm2 logs fabu-backend --lines 20 --nostream
 ```
 
 ## Domains & Routing

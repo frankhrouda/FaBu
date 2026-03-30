@@ -2,6 +2,15 @@
 
 Eine moderne Full-Stack-Anwendung fuer die Verwaltung von Fahrzeugreservierungen, entwickelt mit Node.js (Express + SQLite/PostgreSQL), React (Vite + Tailwind CSS) und React Native (Expo) fuer Mobile.
 
+## Status
+
+- Produktion aktiv auf PostgreSQL
+- Web-App aktiv unter `https://app.fabu-online.de`
+- Landing-Page aktiv unter `https://fabu-online.de`
+- Multi-Tenant-Isolation ist implementiert und produktiv
+- Separate Superadmin-Mandantenverwaltung vorhanden unter `/admin/tenants`
+- Tenant-Name wird im Header angezeigt: `Mandant: [Name]`
+
 ## 🚀 Schnellstart
 
 ### Lokales Setup
@@ -104,7 +113,7 @@ Wichtig bei der Umstellung von SQLite auf PostgreSQL in Produktion:
 2. PostgreSQL bereitstellen, falls noch nicht geschehen: `./setup-postgres.sh`
 3. In `backend/.env` setzen: `DB_CLIENT=postgres` und `DATABASE_URL=...`
 4. Deploy-Skript: `cd /home/deploy/FaBu && ./deploy-prod.sh`
-5. Testen: `https://fabu-online.de`
+5. Testen: `https://app.fabu-online.de`
 
 ### 3. Wartung
 - Backend neu starten: `pm2 restart fabu-backend`
@@ -127,6 +136,10 @@ Wichtig bei der Umstellung von SQLite auf PostgreSQL in Produktion:
 - Visuelles Zeit-Gitter (8:00–19:00) mit gebucht/frei-Status.
 - Admin kann Fahrzeuge filtern: Alle/Einzelne, aktive/inaktive.
 - Admin/Normalnutzer sehen passende Buchungen (je nach Rolle).
+- Multi-Tenant-Rechtekonzept mit Tenant-gebundenen Admins.
+- Superadmin kann separate Mandantenverwaltung unter `/admin/tenants` verwenden.
+- Superadmin kann Mandanten umbenennen, Mitglieder verwalten und Benutzer direkt im Mandanten anlegen.
+- Kennzeichen sind tenant-spezifisch eindeutig, nicht global über alle Mandanten.
 
 ## 🔍 One-Liner für schnellen Desk-Check
 
@@ -225,6 +238,11 @@ Optional kann eine andere SQLite-Quelle angegeben werden:
 cd backend
 SQLITE_DB_PATH=/pfad/zur/fabu-backup.db npm run migrate:sqlite-to-postgres
 ```
+
+Hinweis zum aktuellen Produktionsstand:
+- PostgreSQL ist produktiv aktiv.
+- Bei Legacy-Installationen wurden nachträgliche Schema-Fixes für `vehicles.tenant_id` und tenant-spezifische Kennzeichen-Indizes benötigt.
+- Nach Backend-Änderungen in Produktion immer `pm2 restart fabu-backend` ausführen und den Login-Endpunkt kurz prüfen.
 
 Zusätzlich sind folgende Schutzmechanismen aktiv:
 - `helmet` für Security-Header

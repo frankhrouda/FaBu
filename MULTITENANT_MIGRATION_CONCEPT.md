@@ -1,8 +1,22 @@
 # FaBu Multi-Mandanten-Migration – Konzept & Roadmap
 
-**Status:** Planungsphase  
+**Status:** Historisches Konzeptdokument, Umsetzung inzwischen produktiv  
 **Datum:** März 2026  
 **Scope:** Architekturelle Umgestaltung auf Multi-Mandanten-Unterstützung
+
+## Hinweis zum aktuellen Stand
+
+Dieses Dokument beschreibt die ursprüngliche Roadmap.
+Die Multi-Mandanten-Unterstützung ist inzwischen im Produkt umgesetzt und produktiv ausgerollt.
+
+Der aktuelle Ist-Stand umfasst insbesondere:
+- Tenant-Isolation im Backend
+- Superadmin-Rechte mit separater Mandantenverwaltung
+- Tenant-gebundene Admin-Rechte
+- PostgreSQL-Betrieb in Produktion
+- nachgezogene Produktionsfixes für Legacy-Schemata
+
+Für den aktuellen Betriebsstand sind `README.md`, `SERVER_DEPLOYMENT_CHECKLIST.md`, `PROD_MIGRATION_CHECKLIST.md` und der tatsächliche Code maßgeblich.
 
 ---
 

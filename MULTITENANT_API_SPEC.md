@@ -1,8 +1,20 @@
 # Multi-Tenant API-Spezifikation
 
-**Version:** 1.0 (Draft)  
-**Basis URL:** `/api` (wie zuvor)  
+**Version:** 1.0 (historischer Draft, teilweise veraltet)  
+**Basis URL:** `/api`  
 **Auth:** Bearer Token in `Authorization` Header
+
+## Wichtiger Hinweis
+
+Diese Datei war die Planungsgrundlage fuer die Multi-Tenant-API.
+Der produktive Ist-Stand ist inzwischen weiterentwickelt.
+
+Bekannte Abweichungen zum Code:
+- Nicht alle hier beschriebenen Endpunkte existieren exakt so.
+- Zusaetzliche produktive Endpunkte wurden implementiert, z. B. fuer Superadmin-Mandantenverwaltung und Benutzeranlage im Mandanten.
+- Fuer den tatsaechlichen Stand gilt der Code in `backend/src/routes/*.js`.
+
+Vor Nutzung dieser Datei fuer Implementierung oder Fremdclients bitte immer gegen den aktuellen Code abgleichen.
 
 ---
 

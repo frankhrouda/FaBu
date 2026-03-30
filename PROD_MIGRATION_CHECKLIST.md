@@ -3,6 +3,10 @@
 ## Status
 - ✅ Backup erstellt: `fabu-20260325-151604.db` (28K)
 - ✅ Migration in Produktion abgeschlossen
+- ✅ Produktionsbetrieb läuft auf PostgreSQL
+- ✅ Backend-Startproblem nach Legacy-Schema korrigiert
+- ✅ `vehicles.tenant_id` in Produktion nachgezogen
+- ✅ Tenant-spezifische Kennzeichen-Eindeutigkeit umgesetzt
 
 ## Diagnose auf dem Server
 
@@ -137,3 +141,9 @@ Migration ist abgeschlossen. Als Follow-up sind sinnvoll:
 1. Monitoring prüfen (Backend-Logs, DB-Fehler, API-Fehlerquote) für die nächsten 24h.
 2. Kurzen Smoke-Test im Frontend und in der mobilen App durchführen.
 3. Alte SQLite-Datei nur als Backup behalten und nicht mehr produktiv verwenden.
+
+## Nachtraeglich behobene Produktionsprobleme
+
+1. Der Backend-Start scheiterte zwischenzeitlich in PostgreSQL auf Legacy-Schemata, weil tenant-abhaengige Vehicle-Indizes zu frueh erzeugt wurden.
+2. In Produktion musste `vehicles.tenant_id` einmalig nachgezogen werden, damit der Backend-Start und tenant-spezifische Queries stabil funktionieren.
+3. Der dauerhafte Code-Fix liegt in `backend/src/db/client.js` und verschiebt tenant-abhaengige Index-Erzeugung in den Migrationspfad.
