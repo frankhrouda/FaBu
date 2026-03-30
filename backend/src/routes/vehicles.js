@@ -4,6 +4,15 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+function isUniqueViolation(err) {
+  return Boolean(
+    err?.code === '23505' ||
+    err?.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    err?.code === 'SQLITE_CONSTRAINT' ||
+    String(err?.message || '').includes('UNIQUE constraint failed')
+  );
+}
+
 function requireTenantContext(req, res, { allowSuperAdminWithoutTenant = false } = {}) {
   if (allowSuperAdminWithoutTenant && req.user?.super_admin) {
     return false;
@@ -53,22 +62,51 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   if (requireTenantContext(req, res)) return;
   const { name, license_plate, type, description, active } = req.body;
+  const vehicleId = Number(req.params.id);
+
+  if (!Number.isInteger(vehicleId) || vehicleId <= 0) {
+    return res.status(400).json({ error: 'Ungueltige Fahrzeug-ID' });
+  }
+
   if (!name || !license_plate) {
     return res.status(400).json({ error: 'Name und Kennzeichen sind erforderlich' });
   }
+
   try {
-    const normalizedActive = active == null ? true : Boolean(active);
-    await db.execute(
-      'UPDATE vehicles SET name=?, license_plate=?, type=?, description=?, active=? WHERE id=? AND tenant_id=?',
-      [name.trim(), license_plate.trim().toUpperCase(), type || 'PKW', description || '', normalizedActive, req.params.id, req.tenantId]
+    const existingVehicle = await db.queryOne(
+      'SELECT id, active FROM vehicles WHERE id = ? AND tenant_id = ?',
+      [vehicleId, req.tenantId]
     );
-    const vehicle = await db.queryOne('SELECT * FROM vehicles WHERE id = ? AND tenant_id = ?', [req.params.id, req.tenantId]);
-    if (!vehicle) {
+
+    if (!existingVehicle) {
       return res.status(404).json({ error: 'Fahrzeug nicht gefunden' });
     }
+
+    const normalizedPlate = String(license_plate).trim().toUpperCase();
+    const duplicate = await db.queryOne(
+      'SELECT id FROM vehicles WHERE tenant_id = ? AND UPPER(license_plate) = ? AND id != ? LIMIT 1',
+      [req.tenantId, normalizedPlate, vehicleId]
+    );
+
+    if (duplicate) {
+      return res.status(409).json({ error: 'Kennzeichen bereits vorhanden' });
+    }
+
+    const normalizedActive = active == null ? Boolean(existingVehicle.active) : Boolean(active);
+    await db.execute(
+      'UPDATE vehicles SET name=?, license_plate=?, type=?, description=?, active=? WHERE id=? AND tenant_id=?',
+      [name.trim(), normalizedPlate, type || 'PKW', description || '', normalizedActive, vehicleId, req.tenantId]
+    );
+
+    const vehicle = await db.queryOne('SELECT * FROM vehicles WHERE id = ? AND tenant_id = ?', [vehicleId, req.tenantId]);
     res.json(vehicle);
-  } catch {
-    res.status(409).json({ error: 'Kennzeichen bereits vorhanden' });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return res.status(409).json({ error: 'Kennzeichen bereits vorhanden' });
+    }
+
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des Fahrzeugs' });
   }
 });
 
