@@ -46,6 +46,14 @@ router.get('/availability', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'Parameter fehlen' });
   }
 
+  const vehicle = await db.queryOne(
+    'SELECT id FROM vehicles WHERE id = ? AND active = TRUE AND tenant_id = ?',
+    [vehicle_id, req.tenantId]
+  );
+  if (!vehicle) {
+    return res.status(404).json({ error: 'Fahrzeug nicht aktiv oder nicht gefunden' });
+  }
+
   const endDate = date_to || date;
   let query = `
     SELECT r.id FROM reservations r

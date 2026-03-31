@@ -73,6 +73,10 @@ const DB_PATH = path.join(DATA_DIR, 'fabu.db');
 
 let sqliteDb = null;
 
+function normalizeSqliteParams(params = []) {
+  return params.map((value) => (typeof value === 'boolean' ? (value ? 1 : 0) : value));
+}
+
 function getSqlite() {
   if (!sqliteDb) {
     mkdirSync(DATA_DIR, { recursive: true });
@@ -84,20 +88,21 @@ function getSqlite() {
 }
 
 async function sqliteQueryOne(text, params = []) {
-  return getSqlite().prepare(text).get(...params) ?? null;
+  return getSqlite().prepare(text).get(...normalizeSqliteParams(params)) ?? null;
 }
 
 async function sqliteQueryMany(text, params = []) {
-  return getSqlite().prepare(text).all(...params);
+  return getSqlite().prepare(text).all(...normalizeSqliteParams(params));
 }
 
 async function sqliteExecute(text, params = []) {
+  const normalizedParams = normalizeSqliteParams(params);
   const hasReturning = /RETURNING\s+/i.test(text);
   if (hasReturning) {
-    const row = getSqlite().prepare(text).get(...params) ?? null;
+    const row = getSqlite().prepare(text).get(...normalizedParams) ?? null;
     return { lastInsertId: row?.id ?? null, row };
   }
-  const result = getSqlite().prepare(text).run(...params);
+  const result = getSqlite().prepare(text).run(...normalizedParams);
   return { lastInsertId: result.lastInsertRowid, row: null };
 }
 
@@ -119,6 +124,7 @@ const SQLITE_SCHEMA = `
     license_plate TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'PKW',
     description TEXT DEFAULT '',
+    image_path TEXT,
     price_per_km REAL NOT NULL DEFAULT 0,
     flat_fee REAL,
     active INTEGER NOT NULL DEFAULT 1,
@@ -211,6 +217,7 @@ const PG_SCHEMA = `
     license_plate TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'PKW',
     description TEXT DEFAULT '',
+    image_path TEXT,
     price_per_km DOUBLE PRECISION NOT NULL DEFAULT 0,
     flat_fee DOUBLE PRECISION,
     active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -286,6 +293,7 @@ const PG_SCHEMA = `
 async function ensurePgMigrations() {
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS price_per_km DOUBLE PRECISION NOT NULL DEFAULT 0');
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS flat_fee DOUBLE PRECISION');
+  await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_path TEXT');
   await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS date_to DATE');
   await getPool().query('ALTER TABLE users ADD COLUMN IF NOT EXISTS super_admin BOOLEAN NOT NULL DEFAULT FALSE');
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)');
@@ -350,6 +358,10 @@ function ensureSqliteMigrations() {
   }
   if (!hasFlatFee) {
     getSqlite().exec('ALTER TABLE vehicles ADD COLUMN flat_fee REAL');
+  }
+  const hasImagePath = vehicleColumns.some((col) => col.name === 'image_path');
+  if (!hasImagePath) {
+    getSqlite().exec('ALTER TABLE vehicles ADD COLUMN image_path TEXT');
   }
 
   const columns = getSqlite().prepare("PRAGMA table_info(reservations)").all();
@@ -418,6 +430,7 @@ function ensureSqliteMigrations() {
           license_plate TEXT NOT NULL,
           type TEXT NOT NULL DEFAULT 'PKW',
           description TEXT DEFAULT '',
+          image_path TEXT,
           active INTEGER NOT NULL DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           price_per_km REAL NOT NULL DEFAULT 0,
@@ -427,8 +440,8 @@ function ensureSqliteMigrations() {
       `);
 
       getSqlite().exec(`
-        INSERT INTO vehicles_new (id, name, license_plate, type, description, active, created_at, price_per_km, flat_fee, tenant_id)
-        SELECT id, name, license_plate, type, description, active, created_at, price_per_km, flat_fee, tenant_id
+        INSERT INTO vehicles_new (id, name, license_plate, type, description, image_path, active, created_at, price_per_km, flat_fee, tenant_id)
+        SELECT id, name, license_plate, type, description, NULL, active, created_at, price_per_km, flat_fee, tenant_id
         FROM vehicles
       `);
 

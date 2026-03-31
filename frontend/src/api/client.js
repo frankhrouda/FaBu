@@ -2,10 +2,12 @@ const BASE = '/api';
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('fabu_token');
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
@@ -25,4 +27,9 @@ export const api = {
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  uploadVehicleImage: (vehicleId, file) => {
+    const body = new FormData();
+    body.append('image', file);
+    return request(`/vehicles/${vehicleId}/image`, { method: 'POST', body });
+  },
 };

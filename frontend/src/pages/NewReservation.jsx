@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Car, Calendar, Clock, FileText, CheckCircle2 } from 'lucide-react';
 import { api } from '../api/client';
@@ -30,6 +30,8 @@ export default function NewReservation() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [dragSelection, setDragSelection] = useState(null);
+  const dragPointerIdRef = useRef(null);
+  const reservableVehicles = vehicles.filter((v) => Boolean(v.active));
 
   useEffect(() => { api.get('/vehicles').then(setVehicles); }, []);
 
@@ -174,7 +176,7 @@ export default function NewReservation() {
     }));
   };
 
-  const startDragSelection = (hour) => {
+  const startDragSelection = (hour, pointerId) => {
     setError('');
 
     if (hourInUse(hour)) {
@@ -183,6 +185,7 @@ export default function NewReservation() {
       return;
     }
 
+    dragPointerIdRef.current = pointerId;
     setDragSelection({ anchor: hour, current: hour });
   };
 
@@ -203,16 +206,31 @@ export default function NewReservation() {
     const rangeEndExclusive = Math.max(dragSelection.anchor, dragSelection.current) + 1;
     applyRangeSelection(rangeStart, rangeEndExclusive);
     setDragSelection(null);
+    dragPointerIdRef.current = null;
   };
 
   useEffect(() => {
     if (!dragSelection) return;
 
+    const handlePointerMove = (event) => {
+      if (dragPointerIdRef.current !== event.pointerId) return;
+
+      const element = document.elementFromPoint(event.clientX, event.clientY);
+      const slot = element?.closest?.('[data-hour-slot="true"]');
+      const hour = Number(slot?.getAttribute?.('data-hour'));
+
+      if (Number.isFinite(hour)) {
+        updateDragSelection(hour);
+      }
+    };
+
     const handlePointerEnd = () => finishDragSelection();
+    window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerEnd);
     window.addEventListener('pointercancel', handlePointerEnd);
 
     return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerEnd);
       window.removeEventListener('pointercancel', handlePointerEnd);
     };
@@ -237,11 +255,11 @@ export default function NewReservation() {
           <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
             <Car className="w-4 h-4 text-indigo-500" /> Fahrzeug
           </h2>
-          {vehicles.length === 0 ? (
+          {reservableVehicles.length === 0 ? (
             <p className="text-sm text-gray-500">Keine Fahrzeuge verfügbar</p>
           ) : (
             <div className="space-y-2">
-              {vehicles.map((v) => (
+              {reservableVehicles.map((v) => (
                 <label
                   key={v.id}
                   className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
@@ -381,7 +399,9 @@ export default function NewReservation() {
                       key={`status-${hour}`}
                       type="button"
                       title={title}
-                      onPointerDown={() => startDragSelection(hour)}
+                      data-hour-slot="true"
+                      data-hour={hour}
+                      onPointerDown={(event) => startDragSelection(hour, event.pointerId)}
                       onPointerEnter={() => updateDragSelection(hour)}
                       disabled={isBooked}
                       className={`col-span-11 py-1 border border-gray-100 transition-colors touch-none select-none ${

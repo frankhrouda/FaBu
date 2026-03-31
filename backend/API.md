@@ -105,6 +105,7 @@ Antwort `200`:
     "license_plate": "B-AB-123",
     "type": "PKW",
     "description": "",
+    "image_path": "/uploads/vehicles/vehicle-1-1710000000000.jpg",
     "price_per_km": 0.35,
     "flat_fee": 2.5,
     "active": 1,
@@ -157,6 +158,17 @@ Antwort `200`: aktualisiertes Fahrzeugobjekt.
 
 Moegliche Fehler: `400`, `401`, `403`, `409`, `429`, `500`
 
+### POST `/vehicles/:id/image` (auth + admin)
+
+Upload eines Fahrzeugbilds als `multipart/form-data` mit Feldname `image`.
+
+Akzeptierte Formate: `image/jpeg`, `image/png`, `image/webp`.
+Maximale Dateigroesse: `5 MB`.
+
+Antwort `200`: aktualisiertes Fahrzeugobjekt (inklusive `image_path`).
+
+Moegliche Fehler: `400`, `401`, `403`, `404`, `429`, `500`
+
 ### DELETE `/vehicles/:id` (auth + admin)
 
 Setzt `active = 0` (Soft Delete).
@@ -168,6 +180,22 @@ Antwort `200`:
 ```
 
 Moegliche Fehler: `401`, `403`, `429`, `500`
+
+### DELETE `/vehicles/:id/permanent` (auth + admin)
+
+Loescht ein Fahrzeug dauerhaft (Hard Delete).
+
+Voraussetzungen:
+- Fahrzeug muss vorher deaktiviert sein (`active = 0`)
+- Fahrzeug darf keine verknuepften Reservierungen besitzen
+
+Antwort `200`:
+
+```json
+{ "success": true }
+```
+
+Moegliche Fehler: `400`, `401`, `403`, `404`, `409`, `429`, `500`
 
 ## Reservations
 

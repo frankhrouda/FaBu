@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Car, Plus, Pencil, PowerOff, Power } from 'lucide-react';
+import { Car, Plus, Pencil, PowerOff, Power, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
@@ -17,6 +17,14 @@ const emptyForm = {
   flat_fee: '',
 };
 
+function vehicleImageUrl(imagePath) {
+  if (!imagePath) return null;
+  if (/^https?:\/\//i.test(imagePath)) return imagePath;
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api\/?$/, '');
+  const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${apiBase}${normalizedPath}`;
+}
+
 export default function Vehicles() {
   const { isAdmin } = useAuth();
   const { toasts, show, dismiss } = useToast();
@@ -25,6 +33,8 @@ export default function Vehicles() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // null | 'add' | vehicle object
   const [form, setForm] = useState(emptyForm);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = () =>
@@ -32,7 +42,12 @@ export default function Vehicles() {
 
   useEffect(() => { load(); }, []);
 
-  const openAdd = () => { setForm(emptyForm); setModal('add'); };
+  const openAdd = () => {
+    setForm(emptyForm);
+    setImageFile(null);
+    setImagePreviewUrl('');
+    setModal('add');
+  };
   const openEdit = (v) => {
     setForm({
       name: v.name,
@@ -42,10 +57,27 @@ export default function Vehicles() {
       price_per_km: String(v.price_per_km ?? 0),
       flat_fee: v.flat_fee == null ? '' : String(v.flat_fee),
     });
+    setImageFile(null);
+    setImagePreviewUrl(vehicleImageUrl(v.image_path) || '');
     setModal(v);
   };
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setImage = (e) => {
+    const file = e.target.files?.[0] || null;
+    setImageFile(file);
+
+    if (file) {
+      setImagePreviewUrl(URL.createObjectURL(file));
+      return;
+    }
+
+    if (modal && modal !== 'add') {
+      setImagePreviewUrl(vehicleImageUrl(modal.image_path) || '');
+    } else {
+      setImagePreviewUrl('');
+    }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -58,14 +90,24 @@ export default function Vehicles() {
     };
 
     try {
+      let savedVehicle;
       if (modal === 'add') {
-        await api.post('/vehicles', payload);
+        savedVehicle = await api.post('/vehicles', payload);
         show('Fahrzeug wurde hinzugefügt');
       } else {
-        await api.put(`/vehicles/${modal.id}`, { ...payload, active: modal.active });
+        savedVehicle = await api.put(`/vehicles/${modal.id}`, { ...payload, active: modal.active });
         show('Fahrzeug wurde aktualisiert');
       }
+
+      const uploadVehicleId = modal === 'add' ? savedVehicle?.id : modal.id;
+      if (imageFile && uploadVehicleId) {
+        await api.uploadVehicleImage(uploadVehicleId, imageFile);
+        show('Fahrzeugbild wurde hochgeladen');
+      }
+
       setModal(null);
+      setImageFile(null);
+      setImagePreviewUrl('');
       load();
     } catch (err) {
       show(err.message, 'error');
@@ -85,6 +127,24 @@ export default function Vehicles() {
         active: v.active ? 0 : 1,
       });
       show(v.active ? 'Fahrzeug deaktiviert' : 'Fahrzeug aktiviert');
+      load();
+    } catch (err) {
+      show(err.message, 'error');
+    }
+  };
+
+  const permanentDelete = async (v) => {
+    if (v.active) {
+      show('Fahrzeug zuerst deaktivieren', 'error');
+      return;
+    }
+
+    const confirmed = confirm(`Fahrzeug "${v.name}" dauerhaft loeschen? Dieser Schritt ist unwiderruflich.`);
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/vehicles/${v.id}/permanent`);
+      show('Fahrzeug wurde permanent geloescht');
       load();
     } catch (err) {
       show(err.message, 'error');
@@ -146,6 +206,13 @@ export default function Vehicles() {
                       : ''}
                   </p>
                   {v.description && <p className="text-xs text-gray-500 mt-1">{v.description}</p>}
+                  {v.image_path && (
+                    <img
+                      src={vehicleImageUrl(v.image_path)}
+                      alt={`Fahrzeug ${v.name}`}
+                      className="mt-2 w-full max-w-xs h-24 rounded-lg object-cover border border-gray-200"
+                    />
+                  )}
                 </div>
                 {isAdmin && (
                   <div className="flex items-center gap-1 shrink-0">
@@ -167,6 +234,15 @@ export default function Vehicles() {
                     >
                       {v.active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                     </button>
+                    {!v.active && (
+                      <button
+                        onClick={() => permanentDelete(v)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="Permanent loeschen"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -235,6 +311,21 @@ export default function Vehicles() {
                 className="input resize-none"
                 placeholder="Optional..."
               />
+            </Field>
+            <Field label="Fahrzeugbild (JPG/PNG/WEBP, max. 5 MB)">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={setImage}
+                className="input"
+              />
+              {imagePreviewUrl ? (
+                <img
+                  src={imagePreviewUrl}
+                  alt="Vorschau"
+                  className="mt-2 w-full h-32 rounded-lg object-cover border border-gray-200"
+                />
+              ) : null}
             </Field>
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setModal(null)} className="flex-1 btn-secondary">

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import React from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { vehiclesApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -8,6 +8,15 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Vehicle } from '../types/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Vehicles'>;
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://10.0.2.2:3001/api';
+
+function toImageUrl(imagePath?: string | null) {
+  if (!imagePath) return null;
+  if (/^https?:\/\//i.test(imagePath)) return imagePath;
+  const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
+  const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${serverBase}${normalizedPath}`;
+}
 
 export function VehiclesScreen({ navigation }: Props) {
   const { token, user, logout, availableTenants, activeTenantId, switchTenant, switchingTenant, isAdmin } = useAuth();
@@ -19,17 +28,23 @@ export function VehiclesScreen({ navigation }: Props) {
   });
 
   function renderVehicle({ item }: { item: Vehicle }) {
+    const imageUri = toImageUrl(item.image_path);
+    const isActive = Boolean(item.active);
+
     return (
       <View style={styles.card}>
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.vehicleImage} resizeMode="cover" /> : null}
         <Text style={styles.cardTitle}>{item.name}</Text>
         <Text style={styles.cardMeta}>{item.license_plate} - {item.type}</Text>
+        {!isActive ? <Text style={styles.inactiveBadge}>Inaktiv</Text> : null}
         {!!item.description && <Text style={styles.cardMeta}>{item.description}</Text>}
 
         <Pressable
-          style={styles.reserveButton}
+          style={[styles.reserveButton, !isActive ? styles.reserveButtonDisabled : null]}
           onPress={() => navigation.navigate('NewReservation', { vehicleId: item.id, vehicleName: item.name })}
+          disabled={!isActive}
         >
-          <Text style={styles.reserveButtonText}>Neu reservieren</Text>
+          <Text style={styles.reserveButtonText}>{isActive ? 'Neu reservieren' : 'Nicht reservierbar'}</Text>
         </Pressable>
       </View>
     );
@@ -192,6 +207,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d9e2ea',
   },
+  vehicleImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: '#dde7ef',
+  },
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -201,12 +223,26 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: '#475467',
   },
+  inactiveBadge: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#f2f4f7',
+    color: '#475467',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   reserveButton: {
     marginTop: 10,
     backgroundColor: '#145374',
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
+  },
+  reserveButtonDisabled: {
+    backgroundColor: '#98a2b3',
   },
   reserveButtonText: {
     color: '#fff',

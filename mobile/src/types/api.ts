@@ -27,6 +27,7 @@ export type Vehicle = {
   license_plate: string;
   type: string;
   description: string;
+  image_path?: string | null;
   active: number;
   created_at?: string;
 };
