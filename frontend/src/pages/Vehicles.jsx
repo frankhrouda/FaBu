@@ -20,9 +20,19 @@ const emptyForm = {
 function vehicleImageUrl(imagePath) {
   if (!imagePath) return null;
   if (/^https?:\/\//i.test(imagePath)) return imagePath;
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api\/?$/, '');
-  const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-  return `${apiBase}${normalizedPath}`;
+  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+  let normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+
+  if (normalizedPath.startsWith('/uploads/')) {
+    normalizedPath = `/api${normalizedPath}`;
+  }
+
+  if (/^https?:\/\//i.test(apiBase)) {
+    const apiOrigin = apiBase.replace(/\/api\/?$/, '');
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  return normalizedPath;
 }
 
 export default function Vehicles() {

@@ -14,7 +14,10 @@ function toImageUrl(imagePath?: string | null) {
   if (!imagePath) return null;
   if (/^https?:\/\//i.test(imagePath)) return imagePath;
   const serverBase = API_BASE_URL.replace(/\/api\/?$/, '');
-  const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  let normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  if (normalizedPath.startsWith('/uploads/')) {
+    normalizedPath = `/api${normalizedPath}`;
+  }
   return `${serverBase}${normalizedPath}`;
 }
 

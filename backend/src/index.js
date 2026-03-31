@@ -47,6 +47,7 @@ app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/register-with-invite', authLimiter);
 app.use('/api/auth/tenant-admin-requests', authLimiter);
 app.use('/api', apiLimiter);
+app.use('/api/uploads', express.static(uploadsDir));
 app.use('/uploads', express.static(uploadsDir));
 
 app.use('/api/auth', authRoutes);
