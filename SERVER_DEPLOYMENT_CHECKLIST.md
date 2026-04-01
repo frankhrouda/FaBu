@@ -31,8 +31,8 @@ sudo cp nginx-config-landing-example /etc/nginx/sites-available/fabu-landing
 sudo ln -s /etc/nginx/sites-available/fabu-landing /etc/nginx/sites-enabled/
 
 # App aktivieren
-sudo cp nginx-config-app-example /etc/nginx/sites-available/fabu-app
-sudo ln -s /etc/nginx/sites-available/fabu-app /etc/nginx/sites-enabled/
+sudo cp nginx-config-app-example /etc/nginx/sites-available/fabu-online
+sudo ln -s /etc/nginx/sites-available/fabu-online /etc/nginx/sites-enabled/
 
 # Test & Reload
 sudo nginx -t
@@ -45,6 +45,21 @@ location / {
   try_files $uri $uri/ $uri.html =404;
 }
 ```
+
+App-Hinweis (API + Uploads):
+```nginx
+location ^~ /api/ {
+  proxy_pass http://localhost:3001;
+}
+
+location ^~ /uploads/ {
+  proxy_pass http://localhost:3001;
+}
+```
+
+- [ ] App-Config-Datei ist `/etc/nginx/sites-available/fabu-online`
+- [ ] API-Proxy ist als `location ^~ /api/` gesetzt
+- [ ] Upload-Proxy ist als `location ^~ /uploads/` gesetzt
 
 - [ ] Nginx-Configs aktiviert
 - [ ] `sudo nginx -t` ohne Fehler

@@ -43,9 +43,32 @@ location / {
 
 #### App aktivieren
 ```bash
-sudo cp /home/deploy/FaBu/nginx-config-app-example /etc/nginx/sites-available/fabu-app
-sudo ln -s /etc/nginx/sites-available/fabu-app /etc/nginx/sites-enabled/fabu-app
+sudo cp /home/deploy/FaBu/nginx-config-app-example /etc/nginx/sites-available/fabu-online
+sudo ln -s /etc/nginx/sites-available/fabu-online /etc/nginx/sites-enabled/fabu-online
 ```
+
+Wichtiger App-Hinweis (API und Uploads):
+```nginx
+location ^~ /api/ {
+  proxy_pass http://localhost:3001;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location ^~ /uploads/ {
+  proxy_pass http://localhost:3001;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Hinweis zu Prioritaet:
+- Die Prefix-Locations mit `^~` muessen vor allgemeinen Regex-Caching-Regeln stehen.
+- Sonst koennen Bild-URLs wie `/api/uploads/vehicles/*.jpg` faelschlich als statische Frontend-Datei behandelt werden.
 
 #### Test & Reload
 ```bash
@@ -92,7 +115,7 @@ cd /home/deploy/FaBu
 ```
 /etc/nginx/sites-enabled/
 ├── fabu-landing  → /etc/nginx/sites-available/fabu-landing
-└── fabu-app      → /etc/nginx/sites-available/fabu-app
+└── fabu-online   → /etc/nginx/sites-available/fabu-online
 ```
 
 ## Testing
@@ -127,6 +150,19 @@ sudo systemctl reload nginx
 ```bash
 sudo tail -f /var/log/nginx/error.log
 sudo tail -f /var/log/nginx/access.log
+```
+
+**Fahrzeugbilder fehlen in der App:**
+```bash
+# 1) Pruefen, ob Bild ueber API-Pfad erreichbar ist
+curl -I https://app.fabu-online.de/api/uploads/vehicles/DATEINAME.jpg
+
+# 2) App-Config pruefen
+sudo grep -n "location \^~ /api/\|location \^~ /uploads/" /etc/nginx/sites-available/fabu-online
+
+# 3) Nginx neu laden
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 **Backend Port 3001 blockt?**
