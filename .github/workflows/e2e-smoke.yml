@@ -1,4 +1,4 @@
-name: E2E Smoke Tests
+name: CI Tests
 
 on:
   push:
@@ -9,9 +9,30 @@ on:
       - main
 
 jobs:
+  backend-api-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backend API integration tests
+        run: npm --prefix backend run test
+
   e2e-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: backend-api-integration
 
     steps:
       - name: Checkout repository
