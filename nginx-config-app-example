@@ -11,7 +11,7 @@ server {
     }
 
     # API-Proxy zum Backend
-    location /api {
+    location ^~ /api/ {
         proxy_pass http://localhost:3001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -22,7 +22,7 @@ server {
     }
 
     # Kompatibilitaet fuer direkte Upload-Pfade
-    location /uploads {
+    location ^~ /uploads/ {
         proxy_pass http://localhost:3001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
