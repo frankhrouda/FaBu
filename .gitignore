@@ -9,3 +9,5 @@ mobile/.expo-shared/
 mobile/dist/
 .env
 *.local
+playwright-report/
+test-results/

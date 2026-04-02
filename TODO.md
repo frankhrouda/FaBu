@@ -6,7 +6,7 @@
 ### Offen mittelfristig
 
 - [ ] Audit-Logging für kritische Admin/Superadmin-Aktionen  
-- [ ] Automatisierte Smoke-Tests für Login, Fahrzeuge, Reservierungen, Mandantenverwaltung  
+- [x] Automatisierte Smoke-Tests für Login, Fahrzeuge, Reservierungen, Mandantenverwaltung  
 - [ ] Staging-Checkliste und Rollback-Runbook ergänzen  
 - [ ] Mobile-App auf vollständigen Multi-Tenant-Ist-Stand prüfen  
 
@@ -17,6 +17,7 @@
 
 ### in Arbeit
 
+- [ ] Nur ein Auto. Standardmäßig auswählen bei neuer Reservierung
 - [ ] Bilder für das Fahrzeug an anderen Stellen anzeigen  
 
 ### Erledigt / Test

@@ -1,15 +1,22 @@
 {
   "name": "fabu",
   "private": true,
-  "workspaces": ["backend", "frontend", "landing"],
+  "workspaces": [
+    "backend",
+    "frontend",
+    "landing"
+  ],
   "scripts": {
     "dev": "concurrently -n \"API,WEB\" -c \"cyan,magenta\" \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
     "dev:mobile": "npm --prefix mobile run start",
     "dev:landing": "npm run dev --workspace=landing",
     "build:landing": "npm run build --workspace=landing",
-    "install:all": "npm install"
+    "install:all": "npm install",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "devDependencies": {
+    "@playwright/test": "^1.53.2",
     "concurrently": "^8.2.2"
   }
 }

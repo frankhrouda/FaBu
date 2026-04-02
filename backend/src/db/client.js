@@ -69,7 +69,7 @@ async function pgExecute(text, params = []) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '../../data');
-const DB_PATH = path.join(DATA_DIR, 'fabu.db');
+const DB_PATH = process.env.SQLITE_DB_PATH || path.join(DATA_DIR, 'fabu.db');
 
 let sqliteDb = null;
 
