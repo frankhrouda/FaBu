@@ -17,9 +17,13 @@ import { useToast, ToastContainer } from '../components/Toast';
 
 export default function SuperAdminTenants() {
   const [tenants, setTenants] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [creatingTenant, setCreatingTenant] = useState(false);
+  const [newTenantForm, setNewTenantForm] = useState({ name: '', first_admin_email: '' });
+  const [requestActionId, setRequestActionId] = useState(null);
   const [members, setMembers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const { toasts, show, dismiss } = useToast();
@@ -40,18 +44,33 @@ export default function SuperAdminTenants() {
 
   // Load all tenants
   useEffect(() => {
-    loadTenants();
+    loadOverview();
   }, []);
+
+  const loadOverview = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([loadTenants(), loadPendingRequests()]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadTenants = async () => {
     try {
-      setLoading(true);
       const result = await api.get('/admin/tenants');
       setTenants(result.tenants || []);
     } catch (err) {
       show({ type: 'error', message: 'Fehler beim Laden der Mandanten' });
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const loadPendingRequests = async () => {
+    try {
+      const result = await api.get('/admin/tenant-admin-requests?status=pending');
+      setPendingRequests(result.requests || []);
+    } catch (err) {
+      show({ type: 'error', message: 'Fehler beim Laden offener Anfragen' });
     }
   };
 
@@ -180,6 +199,62 @@ export default function SuperAdminTenants() {
     }
   };
 
+  const handleCreateTenant = async (e) => {
+    e.preventDefault();
+    const name = newTenantForm.name.trim();
+    const firstAdminEmail = newTenantForm.first_admin_email.trim();
+
+    if (!name) {
+      show({ type: 'error', message: 'Mandantenname ist erforderlich' });
+      return;
+    }
+
+    try {
+      setCreatingTenant(true);
+      await api.post('/admin/tenants', {
+        name,
+        first_admin_email: firstAdminEmail || undefined,
+      });
+      setNewTenantForm({ name: '', first_admin_email: '' });
+      show({ type: 'success', message: 'Mandant wurde erstellt' });
+      await loadTenants();
+    } catch (err) {
+      show({ type: 'error', message: err?.message || 'Fehler beim Erstellen des Mandanten' });
+    } finally {
+      setCreatingTenant(false);
+    }
+  };
+
+  const handleApproveRequest = async (request) => {
+    try {
+      setRequestActionId(request.id);
+      await api.post(`/admin/tenant-admin-requests/${request.id}/approve`, {
+        tenant_name: request.tenant_name,
+      });
+      show({ type: 'success', message: 'Anfrage angenommen und Mandant/Administrator angelegt' });
+      await Promise.all([loadTenants(), loadPendingRequests()]);
+    } catch (err) {
+      show({ type: 'error', message: err?.message || 'Fehler beim Annehmen der Anfrage' });
+    } finally {
+      setRequestActionId(null);
+    }
+  };
+
+  const handleRejectRequest = async (request) => {
+    const reason = window.prompt('Optionaler Ablehnungsgrund:', '') || undefined;
+
+    try {
+      setRequestActionId(request.id);
+      await api.post(`/admin/tenant-admin-requests/${request.id}/reject`, { reason });
+      show({ type: 'success', message: 'Anfrage wurde abgelehnt' });
+      await loadPendingRequests();
+    } catch (err) {
+      show({ type: 'error', message: err?.message || 'Fehler beim Ablehnen der Anfrage' });
+    } finally {
+      setRequestActionId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-4 max-w-4xl mx-auto">
@@ -197,18 +272,83 @@ export default function SuperAdminTenants() {
       {!selectedTenant ? (
         // Tenant List View
         <div>
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold">Mandantenverwaltung</h1>
+          </div>
+
+          <form
+            onSubmit={handleCreateTenant}
+            className="mb-6 bg-white border border-gray-200 rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 gap-3"
+          >
+            <input
+              type="text"
+              value={newTenantForm.name}
+              onChange={(e) => setNewTenantForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Neuer Mandantenname"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+            <input
+              type="email"
+              value={newTenantForm.first_admin_email}
+              onChange={(e) => setNewTenantForm((prev) => ({ ...prev, first_admin_email: e.target.value }))}
+              placeholder="Erster Admin (E-Mail, optional)"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
             <button
-              onClick={() => {
-                // TODO: Implement create tenant
-                show({ type: 'info', message: 'Funktion in Arbeit' });
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              type="submit"
+              disabled={creatingTenant}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Neuer Mandant
+              {creatingTenant ? 'Erstelle...' : 'Neuer Mandant'}
             </button>
+          </form>
+
+          <div className="mb-6 bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">Offene Tenant-Admin-Anfragen</h2>
+              <button
+                onClick={loadPendingRequests}
+                className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Aktualisieren
+              </button>
+            </div>
+
+            {pendingRequests.length === 0 ? (
+              <div className="text-sm text-gray-500">Keine offenen Anfragen</div>
+            ) : (
+              <div className="space-y-2">
+                {pendingRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 border border-gray-200 rounded-lg"
+                  >
+                    <div>
+                      <div className="font-medium">{request.tenant_name}</div>
+                      <div className="text-sm text-gray-600">{request.name} · {request.email}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleApproveRequest(request)}
+                        disabled={requestActionId === request.id}
+                        className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      >
+                        Annehmen
+                      </button>
+                      <button
+                        onClick={() => handleRejectRequest(request)}
+                        disabled={requestActionId === request.id}
+                        className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        Ablehnen
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4">

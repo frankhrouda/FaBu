@@ -124,10 +124,75 @@ curl -X POST https://app.fabu-online.de/api/auth/login -H 'Content-Type: applica
 - [ ] API Response erhalten
 
 ## 10. Backups & Monitoring
-- [ ] Tägliche PostgreSQL-Backups einrichten
-- [ ] Logrotation für Nginx/App-Logs
-- [ ] PM2 Monitoring (optional): `pm2 monitor`
-- [ ] UFW Firewall: `sudo ufw status`
+
+### Sofort nach jedem Release (0-2h)
+- [ ] PM2-Prozess ist online: `pm2 status`
+- [ ] Nginx ist healthy: `sudo systemctl status nginx --no-pager`
+- [ ] Kritische Backend-Logs prüfen: `pm2 logs fabu-backend --lines 100 --nostream | grep -Ei "error|exception|timeout|postgres|database" || true`
+- [ ] Nginx-Error-Log prüfen: `sudo tail -n 100 /var/log/nginx/error.log`
+- [ ] Login-Endpoint Smoke-Test: `curl -s -o /dev/null -w "%{http_code}\n" -X POST https://app.fabu-online.de/api/auth/login -H 'Content-Type: application/json' -d '{}'`
+
+### Nach 24 Stunden
+- [ ] Wiederholung Log-Check auf Fehlertrend (Backend + Nginx)
+- [ ] PM2-Restart-Zähler prüfen: `pm2 show fabu-backend | grep -i "restarts"`
+- [ ] Stichprobe zentraler Flows (Login, Fahrzeuge, Reservierung, Mandantenverwaltung)
+
+### Tägliche Routine
+- [ ] PostgreSQL-Backup erzeugen (`pg_dump`)
+- [ ] Backup-Datei auf Dateigröße > 0 und Datum prüfen
+- [ ] Verfügbaren Speicher prüfen: `df -h`
+
+Beispiel-Backupskript (`/home/deploy/FaBu/scripts/backup-postgres.sh`):
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+set -a
+. /home/deploy/FaBu/backend/.env
+set +a
+
+BACKUP_DIR="/home/deploy/FaBu/backend/data/postgres-backups"
+mkdir -p "$BACKUP_DIR"
+
+STAMP="$(date +%Y%m%d-%H%M%S)"
+OUT="$BACKUP_DIR/fabu-postgres-$STAMP.sql.gz"
+
+pg_dump "$DATABASE_URL" | gzip > "$OUT"
+chmod 600 "$OUT"
+
+# Aufbewahrung: 14 Tage
+find "$BACKUP_DIR" -type f -name 'fabu-postgres-*.sql.gz' -mtime +14 -delete
+```
+
+Cron-Beispiel (taeglich 02:30):
+```bash
+crontab -e
+30 2 * * * /home/deploy/FaBu/scripts/backup-postgres.sh >> /home/deploy/FaBu/backend/data/postgres-backups/backup.log 2>&1
+```
+
+### Wöchentliche Routine
+- [ ] Restore-Test gegen Testdatenbank durchfuehren (Backup ist nur valide, wenn Restore klappt)
+- [ ] PM2/Nginx-Logs auf wiederkehrende Warnungen prüfen
+
+Beispiel Restore-Test:
+```bash
+set -a
+. /home/deploy/FaBu/backend/.env
+set +a
+
+LATEST_BACKUP="$(ls -1t /home/deploy/FaBu/backend/data/postgres-backups/fabu-postgres-*.sql.gz | head -n 1)"
+test -n "$LATEST_BACKUP"
+
+createdb fabu_restore_test || true
+gunzip -c "$LATEST_BACKUP" | psql "postgresql://localhost/fabu_restore_test"
+psql "postgresql://localhost/fabu_restore_test" -c "SELECT COUNT(*) FROM users;"
+dropdb fabu_restore_test
+```
+
+### Laufende Betriebschecks
+- [ ] Logrotation für Nginx/App-Logs aktiv halten
+- [ ] PM2 Monitoring bei Bedarf: `pm2 monitor`
+- [ ] Firewall-Status prüfen: `sudo ufw status`
 
 ## Quick Commands (Server)
 
