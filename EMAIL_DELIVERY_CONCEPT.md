@@ -1,6 +1,6 @@
 # FaBu E-Mail-Konzeption (Postausgang)
 
-Stand: 2026-04-04
+Stand: 2026-04-07
 
 ## 1. Ziel und Rahmenbedingungen
 
@@ -319,16 +319,43 @@ Daher sollte Brevo vor finaler Auswahl noch einmal direkt gegen die aktuelle off
 
 ## 9. Mail-Events fuer den Startumfang
 
-Empfohlene initiale Events:
-- auth.registered.welcome
-- auth.password_reset.requested
-- reservation.created
-- reservation.updated
-- reservation.cancelled
-- tenant_admin_request.submitted
+Empfohlene initiale Events (MVP Status):
+- auth.registered.welcome ✅ Implementiert
+- auth.password_reset.requested ✅ Implementiert
+- reservation.created ✅ Implementiert
+- reservation.reminder (Trip-Erinnerung 60 min vor Fahrt) ✅ Implementiert
+
+Laufende Events:
+- reservation.updated ⏳ Geplant
+- reservation.cancelled ⏳ Geplant
+- tenant_admin_request.submitted ⏳ Geplant
 
 Backlog (spaeter umsetzen):
 - waitlist.offer.created
+
+## 9.1 Implementierungsdetails zur Produktion
+
+### Production-Only Email Delivery
+Alle E-Mails werden nur in Production (NODE_ENV === 'production') versendet.
+In Development/Testing wird der Versand geloggt ohne tatsaechlich Mails zu versenden.
+Dies verhindert Spam bei Testdaten mit ungültigen Mailadressen.
+
+### Trip Reminder System
+- Reminder werden beim Erstellen einer Reservierung zeitlich berechnet: reminder_at_utc = date + time_from - reminder_minutes_before
+- Default: 60 Minuten vor Fahrtantritt
+- Worker: backend/src/workers/reminder-worker.js pollt jede Minute nach fälligen Reminders
+- Atomare Updates verhindern Double-Sends in Multi-Instance-Umgebungen
+- Status-Tracking: reminder_status = [pending, sending, sent, failed]
+- Backend-Tabelle: Spalten reminder_minutes_before, reminder_at_utc, reminder_sent_at, reminder_status
+
+### Deployment
+Production-Deployment (deploy-prod.sh) startet automatisch:
+1. Backend-Service (fabu-backend) mit pm2
+2. Reminder Worker (fabu-reminder-worker) mit pm2 als separater Prozess
+
+Lokale Entwicklung:
+- `npm run dev` – nur Backend
+- `npm run worker:dev` – nur Worker (optional, in DEV werden Mails nicht versendet)
 
 Alle Events sollten tenant_id und correlation_id tragen, damit Vorgaenge nachvollziehbar bleiben.
 

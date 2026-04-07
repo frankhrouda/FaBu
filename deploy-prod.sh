@@ -131,6 +131,13 @@ if pm2 describe fabu-backend >/dev/null 2>&1; then
 else
   pm2 start src/index.js --name fabu-backend
 fi
+
+echo "7b) Reminder Worker mit pm2 starten"
+if pm2 describe fabu-reminder-worker >/dev/null 2>&1; then
+  pm2 restart fabu-reminder-worker
+else
+  pm2 start src/workers/reminder-worker.js --name fabu-reminder-worker
+fi
 pm2 save
 
 echo "8) Nginx-Konfiguration prüfen und reload"
