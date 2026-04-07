@@ -41,7 +41,45 @@ export async function createApp() {
 
   app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173', 'https://fabu-online.de', 'https://www.fabu-online.de'] }));
   app.use(helmet());
-  app.use(express.json());
+    // HTTPS Enforcement: redirect HTTP to HTTPS in production
+    if (process.env.NODE_ENV === 'production') {
+      app.use((req, res, next) => {
+        if (req.header('x-forwarded-proto') !== 'https') {
+          return res.redirect(301, `https://${req.header('host')}${req.url}`);
+        }
+        next();
+      });
+    }
+
+    // Configure CORS appropriately based on environment
+    const corsOrigins = process.env.NODE_ENV === 'production'
+      ? ['https://fabu-online.de', 'https://www.fabu-online.de']
+      : ['http://localhost:5173', 'http://localhost:4173', 'https://fabu-online.de', 'https://www.fabu-online.de'];
+  
+    app.use(cors({
+      origin: corsOrigins,
+      credentials: true,  // Allow credentials for cookie-based auth
+      methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+    }));
+
+    app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+        },
+      },
+      hsts: {
+        maxAge: 31536000,  // 1 year
+        includeSubDomains: true,
+        preload: true,
+      },
+    }));
+  
+    app.use(express.json());
 
   app.use('/api/auth/login', authLimiter);
   app.use('/api/auth/register', authLimiter);
