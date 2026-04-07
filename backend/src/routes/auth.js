@@ -98,6 +98,7 @@ const router = Router();
 
 const ALLOW_OPEN_REGISTRATION = process.env.ALLOW_OPEN_REGISTRATION === 'true';
 const INVITATION_EXPIRES_HOURS = Number(process.env.INVITATION_EXPIRES_HOURS || 24);
+const PASSWORD_RESET_COOLDOWN_MS = Number(process.env.PASSWORD_RESET_COOLDOWN_MS || 5 * 60 * 1000);
 
 async function getTenantMemberships(userId) {
   return db.queryMany(
@@ -552,6 +553,22 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     if (user) {
+      const latestToken = await db.queryOne(
+        `SELECT created_at
+         FROM password_reset_tokens
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [user.id]
+      );
+
+      const latestTokenAt = latestToken?.created_at ? new Date(latestToken.created_at).getTime() : 0;
+      const isInCooldown = latestTokenAt && (Date.now() - latestTokenAt) < PASSWORD_RESET_COOLDOWN_MS;
+
+      if (isInCooldown) {
+        return res.json({ message: 'Falls ein Konto mit dieser E-Mail existiert, wurde ein Link versendet.' });
+      }
+
       // Alte, noch offene Tokens für diesen User ungültig machen
       await db.execute(
         'UPDATE password_reset_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL',
