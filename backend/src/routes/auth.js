@@ -7,6 +7,7 @@ import { JWT_SECRET, authenticate, requireAdmin } from '../middleware/auth.js';
 import { sendMail } from '../mail/mailer.js';
 
 const APP_FRONTEND_URL = process.env.APP_FRONTEND_URL || 'https://app.fabu-online.de';
+const JWT_SESSION_TIMEOUT = '20m';  // Session expires after 20 minutes of inactivity
 
 function welcomeMailHtml(name, tenantName) {
   return `<!DOCTYPE html>
@@ -217,7 +218,7 @@ router.post('/register', async (req, res) => {
     const token = jwt.sign(
       buildTokenPayload({ id, role, superAdmin, activeTenantId }),
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_SESSION_TIMEOUT }
     );
 
     const activeTenantName = memberships.find((membership) => Number(membership.id) === Number(activeTenantId))?.name;
@@ -303,7 +304,7 @@ router.post('/register-with-invite', async (req, res) => {
     const token = jwt.sign(
       buildTokenPayload({ id: userId, role: 'user', superAdmin: false, activeTenantId }),
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_SESSION_TIMEOUT }
     );
 
     sendMail({
@@ -422,7 +423,7 @@ router.post('/login', async (req, res) => {
         activeTenantId,
       }),
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_SESSION_TIMEOUT }
     );
     res.json({ token, user, available_tenants: getAccessibleTenants(user, memberships, activeTenantId) });
   } catch (err) {
@@ -462,7 +463,7 @@ router.post('/switch-tenant/:tenantId', authenticate, async (req, res) => {
         activeTenantId: tenantId,
       }),
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_SESSION_TIMEOUT }
     );
 
     res.json({
