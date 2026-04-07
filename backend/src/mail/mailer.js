@@ -29,6 +29,12 @@ function getClient() {
  * @returns {Promise<string|null>} provider message ID oder null (bei deaktiviertem Versand)
  */
 export async function sendMail({ to, subject, html }) {
+  // Nur in Production versenden – in Entwicklung/Testing loggen wir nur
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[mailer] DEV MODE – Mail nicht versendet:', { to, subject });
+    return null;
+  }
+
   const client = getClient();
 
   if (!client) {

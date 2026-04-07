@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "worker": "node src/workers/reminder-worker.js",
+    "worker:dev": "nodemon src/workers/reminder-worker.js",
     "migrate:sqlite-to-postgres": "node scripts/migrate-sqlite-to-postgres.js",
     "test": "vitest run",
     "test:watch": "vitest"

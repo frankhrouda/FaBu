@@ -6,6 +6,29 @@ import { sendMail } from '../mail/mailer.js';
 
 const router = Router();
 
+/**
+ * Berechnet reminder_at_utc: Die UTC-Zeit, zu der die Erinnerung versendet werden soll.
+ * reminder_at_utc = startDateTime - reminder_minutes_before
+ * 
+ * @param {string} date - YYYY-MM-DD
+ * @param {string} time - HH:MM or HH:MM:SS
+ * @param {number} reminderMinutesBefore - Minuten vor Start
+ * @returns {string} ISO 8601 UTC string (YYYY-MM-DDTHH:MM:SSZ)
+ */
+function calculateReminderAtUtc(date, time, reminderMinutesBefore) {
+  // Parse date + time zu lokalem DateTime
+  const datetimeStr = `${date}T${time}`;
+  const localDate = new Date(datetimeStr);
+
+  // Substrahiere reminder_minutes_before
+  const reminderDate = new Date(
+    localDate.getTime() - reminderMinutesBefore * 60 * 1000
+  );
+
+  // Rückgabe als ISO 8601 UTC String
+  return reminderDate.toISOString();
+}
+
 function requireTenantContext(req, res, { allowSuperAdminWithoutTenant = false } = {}) {
   if (allowSuperAdminWithoutTenant && req.user?.super_admin) {
     return false;
@@ -154,8 +177,19 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     const { lastInsertId, row } = await db.execute(
-      'INSERT INTO reservations (user_id, vehicle_id, date, date_to, time_from, time_to, reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, vehicle_id, date, endDate, time_from, time_to, reason.trim()]
+      'INSERT INTO reservations (user_id, vehicle_id, date, date_to, time_from, time_to, reason, reminder_minutes_before, reminder_at_utc, reminder_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        req.user.id,
+        vehicle_id,
+        date,
+        endDate,
+        time_from,
+        time_to,
+        reason.trim(),
+        60,  // Default: 60 minutes before
+        calculateReminderAtUtc(date, time_from, 60),  // Calculate reminder time
+        'pending'
+      ]
     );
     const id = row?.id ?? lastInsertId;
 

@@ -143,6 +143,10 @@ const SQLITE_SCHEMA = `
     km_driven INTEGER,
     destination TEXT,
     status TEXT NOT NULL DEFAULT 'reserved',
+    reminder_minutes_before INTEGER DEFAULT 60,
+    reminder_at_utc TEXT,
+    reminder_sent_at TEXT,
+    reminder_status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
@@ -267,6 +271,10 @@ const PG_SCHEMA = `
     km_driven INTEGER,
     destination TEXT,
     status TEXT NOT NULL DEFAULT 'reserved',
+    reminder_minutes_before INTEGER DEFAULT 60,
+    reminder_at_utc TIMESTAMPTZ,
+    reminder_sent_at TIMESTAMPTZ,
+    reminder_status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
 
@@ -354,6 +362,10 @@ async function ensurePgMigrations() {
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS flat_fee DOUBLE PRECISION');
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_path TEXT');
   await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS date_to DATE');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_minutes_before INTEGER DEFAULT 60');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_at_utc TIMESTAMPTZ');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_status TEXT DEFAULT \'pending\'');
   await getPool().query('ALTER TABLE users ADD COLUMN IF NOT EXISTS super_admin BOOLEAN NOT NULL DEFAULT FALSE');
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)');
   await getPool().query('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
@@ -433,6 +445,26 @@ function ensureSqliteMigrations() {
     getSqlite().exec('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
   } else {
     getSqlite().exec('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
+  }
+
+  const hasReminderMinutesBefore = columns.some((col) => col.name === 'reminder_minutes_before');
+  if (!hasReminderMinutesBefore) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN reminder_minutes_before INTEGER DEFAULT 60');
+  }
+
+  const hasReminderAtUtc = columns.some((col) => col.name === 'reminder_at_utc');
+  if (!hasReminderAtUtc) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN reminder_at_utc TEXT');
+  }
+
+  const hasReminderSentAt = columns.some((col) => col.name === 'reminder_sent_at');
+  if (!hasReminderSentAt) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN reminder_sent_at TEXT');
+  }
+
+  const hasReminderStatus = columns.some((col) => col.name === 'reminder_status');
+  if (!hasReminderStatus) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN reminder_status TEXT DEFAULT \'pending\'');
   }
 
   const userColumns = getSqlite().prepare("PRAGMA table_info(users)").all();
