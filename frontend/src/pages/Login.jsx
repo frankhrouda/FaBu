@@ -106,6 +106,11 @@ export default function Login() {
               Registrieren
             </Link>
           </p>
+          <p className="text-center text-sm text-gray-500 mt-2">
+            <Link to="/forgot-password" className="text-indigo-600 font-medium hover:underline">
+              Passwort vergessen?
+            </Link>
+          </p>
           <p className="text-center text-sm text-gray-500 mt-3">
             <Link to="/tenant-admin-request" className="text-indigo-600 font-medium hover:underline">
               Ich möchte auch ein oder mehrere Fahrzeuge zur Reservierung anbieten.

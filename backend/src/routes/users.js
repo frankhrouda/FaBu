@@ -61,15 +61,24 @@ router.patch('/:id/role', authenticate, requireAdmin, async (req, res) => {
 });
 
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
-  if (requireTenantContext(req, res)) return;
-  if (Number(req.params.id) === req.user.id) {
+  if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
+  const targetId = Number(req.params.id);
+  if (targetId === req.user.id) {
     return res.status(400).json({ error: 'Eigener Account kann nicht gelöscht werden' });
   }
   try {
     if (req.user.super_admin && !req.tenantId) {
-      await db.execute('DELETE FROM users WHERE id = ?', [req.params.id]);
+      // Globales Löschen: abhängige Datensätze bereinigen (FK-Constraints)
+      await db.execute('DELETE FROM waitlist WHERE user_id = ?', [targetId]);
+      await db.execute('DELETE FROM reservations WHERE user_id = ?', [targetId]);
+      await db.execute('DELETE FROM invitation_codes WHERE created_by = ?', [targetId]);
+      await db.execute('UPDATE invitation_codes SET used_by = NULL WHERE used_by = ?', [targetId]);
+      await db.execute('UPDATE tenants SET created_by = NULL WHERE created_by = ?', [targetId]);
+      await db.execute('UPDATE tenant_admin_requests SET approved_user_id = NULL WHERE approved_user_id = ?', [targetId]);
+      await db.execute('UPDATE tenant_admin_requests SET decided_by = NULL WHERE decided_by = ?', [targetId]);
+      await db.execute('DELETE FROM users WHERE id = ?', [targetId]);
     } else {
-      await db.execute('DELETE FROM tenant_members WHERE tenant_id = ? AND user_id = ?', [req.tenantId, req.params.id]);
+      await db.execute('DELETE FROM tenant_members WHERE tenant_id = ? AND user_id = ?', [req.tenantId, targetId]);
     }
     res.json({ success: true });
   } catch (err) {

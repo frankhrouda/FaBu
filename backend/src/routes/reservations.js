@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { db } from '../db/client.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { triggerAutoFill } from './waitlist.js';
+import { sendMail } from '../mail/mailer.js';
 
 const router = Router();
 
@@ -22,6 +24,46 @@ const WITH_DETAILS = `
   JOIN users u ON r.user_id = u.id
   JOIN vehicles v ON r.vehicle_id = v.id
 `;
+
+function reservationCreatedHtml(reservation) {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:40px 36px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="padding-bottom:6px;">
+          <span style="font-size:24px;font-weight:bold;color:#4f46e5;">FaBu</span>
+          <span style="font-size:13px;color:#9ca3af;margin-left:8px;">Digitales Fahrtenbuch</span>
+        </td></tr>
+        <tr><td style="border-top:1px solid #e5e7eb;padding-top:24px;padding-bottom:16px;">
+          <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Reservierung bestätigt</h2>
+          <p style="margin:0 0 8px;color:#374151;font-size:15px;">Hallo ${reservation.user_name},</p>
+          <p style="margin:0 0 18px;color:#374151;font-size:15px;line-height:1.5;">
+            deine Reservierung wurde erfolgreich angelegt.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;">
+            <tr><td style="font-size:14px;color:#111827;padding:6px 0;"><strong>Fahrzeug:</strong> ${reservation.vehicle_name} (${reservation.license_plate})</td></tr>
+            <tr><td style="font-size:14px;color:#111827;padding:6px 0;"><strong>Von:</strong> ${reservation.date} ${reservation.time_from}</td></tr>
+            <tr><td style="font-size:14px;color:#111827;padding:6px 0;"><strong>Bis:</strong> ${reservation.date_to} ${reservation.time_to}</td></tr>
+            <tr><td style="font-size:14px;color:#111827;padding:6px 0;"><strong>Grund:</strong> ${reservation.reason}</td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+          <p style="margin:0;color:#9ca3af;font-size:12px;">
+            FaBu – Digitales Fahrtenbuch &nbsp;|&nbsp;
+            <a href="https://fabu-online.de/impressum" style="color:#9ca3af;text-decoration:none;">Impressum</a>
+            &nbsp;|&nbsp;
+            <a href="https://fabu-online.de/datenschutz" style="color:#9ca3af;text-decoration:none;">Datenschutz</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
 
 router.get('/', authenticate, async (req, res) => {
   if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
@@ -118,6 +160,13 @@ router.post('/', authenticate, async (req, res) => {
     const id = row?.id ?? lastInsertId;
 
     const reservation = await db.queryOne(`${WITH_DETAILS} WHERE r.id = ?`, [id]);
+
+    sendMail({
+      to: reservation.user_email,
+      subject: 'FaBu – Reservierung bestätigt',
+      html: reservationCreatedHtml(reservation),
+    }).catch((mailErr) => console.error('[reservation.created] Mail-Fehler:', mailErr));
+
     res.status(201).json(reservation);
   } catch (err) {
     console.error(err);
@@ -185,6 +234,15 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
     }
 
     await db.execute("UPDATE reservations SET status = 'cancelled' WHERE id = ?", [req.params.id]);
+    // Wartelisten-Kandidaten für diesen Slot benachrichtigen
+    await triggerAutoFill(
+      reservation.vehicle_id,
+      reservation.date,
+      reservation.date_to,
+      reservation.time_from,
+      reservation.time_to,
+      req.tenantId
+    );
     res.json({ success: true });
   } catch (err) {
     console.error(err);

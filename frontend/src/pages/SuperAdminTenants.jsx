@@ -9,7 +9,8 @@ import {
   X,
   Shield,
   ShieldOff,
-  Trash2,
+  UserMinus,
+  UserX,
   Plus,
 } from 'lucide-react';
 import { api } from '../api/client';
@@ -34,6 +35,7 @@ export default function SuperAdminTenants() {
   const [savingName, setSavingName] = useState(false);
   const [updatingUserRole, setUpdatingUserRole] = useState(null);
   const [removingMemberId, setRemovingMemberId] = useState(null);
+  const [deletingUserId, setDeletingUserId] = useState(null);
   const [creatingMember, setCreatingMember] = useState(false);
   const [newMemberForm, setNewMemberForm] = useState({
     name: '',
@@ -170,6 +172,25 @@ export default function SuperAdminTenants() {
       show({ type: 'error', message: err.message || 'Fehler beim Entfernen des Mitglieds' });
     } finally {
       setRemovingMemberId(null);
+    }
+  };
+
+  const handleDeleteUserGlobally = async (member) => {
+    const confirmed = window.confirm(
+      `Benutzer "${member.name}" (${member.email}) UNWIDERRUFLICH löschen?\n\nDies entfernt den Account und alle Reservierungen dieses Benutzers aus dem gesamten System.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingUserId(member.id);
+      await api.delete(`/users/${member.id}`);
+      setMembers((prev) => prev.filter((m) => m.id !== member.id));
+      show({ type: 'success', message: `Benutzer ${member.name} wurde gelöscht` });
+      await loadTenants();
+    } catch (err) {
+      show({ type: 'error', message: err.message || 'Fehler beim Löschen des Benutzers' });
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -520,7 +541,7 @@ export default function SuperAdminTenants() {
                           <div className="font-semibold">{member.name}</div>
                           <div className="text-sm text-gray-500">{member.email}</div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
                           {member.tenant_role === 'admin' ? (
                             <button
                               onClick={() => handleChangeUserRole(member.id, 'user')}
@@ -540,15 +561,34 @@ export default function SuperAdminTenants() {
                               Benutzer
                             </button>
                           )}
-                          <button
-                            onClick={() => handleRemoveMember(member)}
-                            disabled={removingMemberId === member.id || updatingUserRole === member.id}
-                            className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 disabled:opacity-50 transition-colors flex items-center gap-1"
-                            title="Mitglied aus Mandant entfernen"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Entfernen
-                          </button>
+                          <div className="relative group">
+                            <button
+                              onClick={() => handleRemoveMember(member)}
+                              disabled={removingMemberId === member.id || updatingUserRole === member.id}
+                              className="w-9 h-9 bg-amber-100 text-amber-700 rounded-md hover:bg-amber-200 disabled:opacity-50 transition-colors flex items-center justify-center"
+                              title="Mitglied aus Mandant entfernen"
+                              aria-label="Mitglied aus Mandant entfernen"
+                            >
+                              <UserMinus className="w-4 h-4" />
+                            </button>
+                            <span className="pointer-events-none absolute right-0 -top-2 -translate-y-full whitespace-nowrap rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-xs font-medium text-amber-800 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                              Aus Mandant entfernen
+                            </span>
+                          </div>
+                          <div className="relative group">
+                            <button
+                              onClick={() => handleDeleteUserGlobally(member)}
+                              disabled={deletingUserId === member.id || removingMemberId === member.id || updatingUserRole === member.id}
+                              className="w-9 h-9 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center"
+                              title="Benutzer global und unwiderruflich löschen"
+                              aria-label="Benutzer global und unwiderruflich löschen"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
+                            <span className="pointer-events-none absolute right-0 -top-2 -translate-y-full whitespace-nowrap rounded-md bg-red-50 border border-red-200 px-2 py-1 text-xs font-medium text-red-800 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                              Global löschen
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}

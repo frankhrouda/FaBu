@@ -11,6 +11,8 @@ import NewReservation from './pages/NewReservation';
 import Admin from './pages/Admin';
 import SuperAdminTenants from './pages/SuperAdminTenants';
 import Calendar from './pages/Calendar';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -43,6 +45,8 @@ export default function App() {
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
           <Route path="/tenant-admin-request" element={<TenantAdminRequest />} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
           <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="vehicles" element={<Vehicles />} />

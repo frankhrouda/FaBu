@@ -193,6 +193,7 @@ FaBu/
 - Android Screen-by-Screen Backlog (Implementierungsreihenfolge): `backend/ANDROID_SCREEN_BACKLOG.md`
 - Vollstaendiges Kotlin Retrofit-Template (alle Endpunkte + DTOs): `backend/android-template/FabuApiTemplate.kt`
 - React Native Expo Setup (MVP mit Login/Fahrzeuge/Reservierung): `mobile/README.md`
+- E-Mail-Konzeption (Postausgang, Outbox, Worker, Sicherheit, Kostenstrategie): `EMAIL_DELIVERY_CONCEPT.md`
 
 ## 🔐 Sicherheit
 

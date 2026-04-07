@@ -11,6 +11,7 @@ import vehicleRoutes from './routes/vehicles.js';
 import reservationRoutes from './routes/reservations.js';
 import tenantRoutes from './routes/tenants.js';
 import userRoutes from './routes/users.js';
+import waitlistRoutes from './routes/waitlist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsDir = path.join(__dirname, '../data/uploads');
@@ -46,6 +47,8 @@ export async function createApp() {
   app.use('/api/auth/register', authLimiter);
   app.use('/api/auth/register-with-invite', authLimiter);
   app.use('/api/auth/tenant-admin-requests', authLimiter);
+  app.use('/api/auth/forgot-password', authLimiter);
+  app.use('/api/auth/reset-password', authLimiter);
   app.use('/api', apiLimiter);
   app.use('/api/uploads', express.static(uploadsDir));
   app.use('/uploads', express.static(uploadsDir));
@@ -56,6 +59,7 @@ export async function createApp() {
   app.use('/api/vehicles', vehicleRoutes);
   app.use('/api/reservations', reservationRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/waitlist', waitlistRoutes);
 
   app.use((err, req, res, _next) => {
     console.error(err);

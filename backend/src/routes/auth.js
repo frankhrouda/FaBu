@@ -4,6 +4,95 @@ import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { db } from '../db/client.js';
 import { JWT_SECRET, authenticate, requireAdmin } from '../middleware/auth.js';
+import { sendMail } from '../mail/mailer.js';
+
+const APP_FRONTEND_URL = process.env.APP_FRONTEND_URL || 'https://app.fabu-online.de';
+
+function welcomeMailHtml(name, tenantName) {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:40px 36px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="padding-bottom:6px;">
+          <span style="font-size:24px;font-weight:bold;color:#4f46e5;">FaBu</span>
+          <span style="font-size:13px;color:#9ca3af;margin-left:8px;">Digitales Fahrtenbuch</span>
+        </td></tr>
+        <tr><td style="border-top:1px solid #e5e7eb;padding-top:24px;padding-bottom:16px;">
+          <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Willkommen bei FaBu</h2>
+          <p style="margin:0 0 8px;color:#374151;font-size:15px;">Hallo ${name},</p>
+          <p style="margin:0 0 8px;color:#374151;font-size:15px;line-height:1.5;">
+            dein Konto wurde erfolgreich erstellt.
+          </p>
+          <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.5;">
+            Aktiver Mandant: <strong>${tenantName || 'FaBu'}</strong>
+          </p>
+          <a href="${APP_FRONTEND_URL}"
+             style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:bold;font-size:15px;">
+            Jetzt anmelden
+          </a>
+        </td></tr>
+        <tr><td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+          <p style="margin:0;color:#9ca3af;font-size:12px;">
+            FaBu – Digitales Fahrtenbuch &nbsp;|&nbsp;
+            <a href="https://fabu-online.de/impressum" style="color:#9ca3af;text-decoration:none;">Impressum</a>
+            &nbsp;|&nbsp;
+            <a href="https://fabu-online.de/datenschutz" style="color:#9ca3af;text-decoration:none;">Datenschutz</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function passwordResetHtml(name, resetLink) {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:40px 36px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="padding-bottom:6px;">
+          <span style="font-size:24px;font-weight:bold;color:#4f46e5;">FaBu</span>
+          <span style="font-size:13px;color:#9ca3af;margin-left:8px;">Digitales Fahrtenbuch</span>
+        </td></tr>
+        <tr><td style="border-top:1px solid #e5e7eb;padding-top:24px;padding-bottom:16px;">
+          <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Passwort zurücksetzen</h2>
+          <p style="margin:0 0 8px;color:#374151;font-size:15px;">Hallo ${name},</p>
+          <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.5;">
+            wir haben eine Anfrage erhalten, das Passwort für dein FaBu-Konto zurückzusetzen.
+            Klicke auf den Button, um ein neues Passwort zu vergeben.
+          </p>
+          <a href="${resetLink}"
+             style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:bold;font-size:15px;">
+            Passwort zurücksetzen
+          </a>
+          <p style="margin:24px 0 0;color:#6b7280;font-size:13px;">
+            Dieser Link ist <strong>1 Stunde</strong> gültig.
+          </p>
+          <p style="margin:8px 0 0;color:#6b7280;font-size:13px;">
+            Falls du kein neues Passwort angefordert hast, kannst du diese E-Mail ignorieren.
+          </p>
+        </td></tr>
+        <tr><td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+          <p style="margin:0;color:#9ca3af;font-size:12px;">
+            FaBu – Digitales Fahrtenbuch &nbsp;|&nbsp;
+            <a href="https://fabu-online.de/impressum" style="color:#9ca3af;text-decoration:none;">Impressum</a>
+            &nbsp;|&nbsp;
+            <a href="https://fabu-online.de/datenschutz" style="color:#9ca3af;text-decoration:none;">Datenschutz</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
 
 const router = Router();
 
@@ -129,6 +218,14 @@ router.post('/register', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    const activeTenantName = memberships.find((membership) => Number(membership.id) === Number(activeTenantId))?.name;
+    sendMail({
+      to: user.email,
+      subject: 'Willkommen bei FaBu',
+      html: welcomeMailHtml(user.name, activeTenantName),
+    }).catch((mailErr) => console.error('[register] Welcome-Mail-Fehler:', mailErr));
+
     res.status(201).json({ token, user, available_tenants: getAccessibleTenants(user, memberships, activeTenantId) });
   } catch (err) {
     console.error(err);
@@ -207,6 +304,12 @@ router.post('/register-with-invite', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    sendMail({
+      to: user.email,
+      subject: 'Willkommen bei FaBu',
+      html: welcomeMailHtml(user.name, invite.tenant_name),
+    }).catch((mailErr) => console.error('[register-with-invite] Welcome-Mail-Fehler:', mailErr));
 
     res.status(201).json({ token, user, available_tenants: getAccessibleTenants(user, memberships, activeTenantId), tenant_name: invite.tenant_name });
   } catch (err) {
@@ -434,4 +537,85 @@ router.post('/invitations', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'E-Mail ist erforderlich' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await db.queryOne(
+      'SELECT id, name, email FROM users WHERE LOWER(email) = ?',
+      [normalizedEmail]
+    );
+
+    if (user) {
+      // Alte, noch offene Tokens für diesen User ungültig machen
+      await db.execute(
+        'UPDATE password_reset_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL',
+        [new Date().toISOString(), user.id]
+      );
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await db.execute(
+        'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+        [user.id, token, expiresAt]
+      );
+
+      const resetLink = `${APP_FRONTEND_URL}/reset-password?token=${token}`;
+
+      sendMail({
+        to: user.email,
+        subject: 'FaBu – Passwort zurücksetzen',
+        html: passwordResetHtml(user.name, resetLink),
+      }).catch((err) => console.error('[forgot-password] Mail-Fehler:', err));
+    }
+
+    // Immer gleiche Antwort – gibt nicht preis, ob die E-Mail existiert
+    res.json({ message: 'Falls ein Konto mit dieser E-Mail existiert, wurde ein Link versendet.' });
+  } catch (err) {
+    console.error('[forgot-password]', err);
+    res.status(500).json({ error: 'Fehler beim Verarbeiten der Anfrage' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token und Passwort sind erforderlich' });
+    }
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen haben' });
+    }
+
+    const tokenRow = await db.queryOne(
+      'SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL',
+      [String(token).trim()]
+    );
+
+    if (!tokenRow || new Date(tokenRow.expires_at) <= new Date()) {
+      return res.status(400).json({ error: 'Link ist ungültig oder abgelaufen' });
+    }
+
+    const hash = await bcrypt.hash(String(password), 10);
+    await db.execute('UPDATE users SET password = ? WHERE id = ?', [hash, tokenRow.user_id]);
+    await db.execute(
+      'UPDATE password_reset_tokens SET used_at = ? WHERE id = ?',
+      [new Date().toISOString(), tokenRow.id]
+    );
+
+    res.json({ message: 'Passwort erfolgreich geändert' });
+  } catch (err) {
+    console.error('[reset-password]', err);
+    res.status(500).json({ error: 'Fehler beim Zurücksetzen des Passworts' });
+  }
+});
+
 export default router;
+
