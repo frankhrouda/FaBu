@@ -83,14 +83,14 @@ cd /home/deploy/FaBu
 NPM_CONFIG_OMIT=dev npm install --workspace=backend --omit=dev
 
 echo "5) Frontend installieren und bauen"
-# Workspace-Install erzwingen und devDependencies trotz NODE_ENV=production mitnehmen,
-# da der Vite-Build @vitejs/plugin-react aus devDependencies benoetigt.
-cd /home/deploy/FaBu
-NPM_CONFIG_PRODUCTION=false NPM_CONFIG_OMIT= NPM_CONFIG_INCLUDE=dev npm install --workspace=frontend --include=dev
+# Unabhaengig von Workspace-/Root-npm-Config installieren, damit devDependencies
+# (u. a. @vitejs/plugin-react) fuer den Vite-Build sicher vorhanden sind.
+cd /home/deploy/FaBu/frontend
+NPM_CONFIG_PRODUCTION=false NPM_CONFIG_OMIT= NPM_CONFIG_INCLUDE=dev npm install --include=dev --workspaces=false
 
-# Defensive Pruefung, damit Build nicht spaet mit "Cannot find package" abbricht.
-if ! npm ls @vitejs/plugin-react --workspace=frontend --depth=0 >/dev/null 2>&1; then
-  echo "FEHLER: @vitejs/plugin-react wurde nicht installiert."
+# Defensive Pruefung mit echter Modul-Resolution im Frontend-Verzeichnis.
+if ! node --input-type=module -e "import('@vitejs/plugin-react')" >/dev/null 2>&1; then
+  echo "FEHLER: @vitejs/plugin-react ist im Frontend nicht resolvable."
   echo "Bitte npm-Config auf dem Server pruefen (omit/include/prod)."
   npm config get production || true
   npm config get omit || true
@@ -98,12 +98,12 @@ if ! npm ls @vitejs/plugin-react --workspace=frontend --depth=0 >/dev/null 2>&1;
   exit 1
 fi
 
-npm run build --workspace=frontend
+npm run build
 
 echo "6) Frontend Deploy nach /var/www/html/fabu"
 sudo rm -rf /var/www/html/fabu
 sudo mkdir -p /var/www/html/fabu
-sudo cp -r frontend/dist/* /var/www/html/fabu/
+sudo cp -r dist/* /var/www/html/fabu/
 sudo chown -R www-data:www-data /var/www/html/fabu
 sudo chmod -R 755 /var/www/html/fabu
 
