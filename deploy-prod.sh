@@ -83,7 +83,9 @@ npm install --production
 
 echo "5) Frontend installieren und bauen"
 cd ../frontend
-npm install
+# backend/.env kann NODE_ENV=production setzen. Fuer Vite-Build werden aber
+# devDependencies (z. B. @vitejs/plugin-react) benoetigt.
+npm install --include=dev
 npm run build
 
 echo "6) Frontend Deploy nach /var/www/html/fabu"
