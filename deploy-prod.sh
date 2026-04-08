@@ -82,11 +82,19 @@ cd backend
 npm install --production
 
 echo "5) Frontend installieren und bauen"
-cd ../frontend
-# backend/.env kann NODE_ENV=production setzen. Fuer Vite-Build werden aber
-# devDependencies (z. B. @vitejs/plugin-react) benoetigt.
-npm install --include=dev
-npm run build
+cd ..
+# Workspace-Install erzwingen und devDependencies trotz NODE_ENV=production mitnehmen,
+# da der Vite-Build @vitejs/plugin-react aus devDependencies benoetigt.
+NPM_CONFIG_PRODUCTION=false npm install --workspace=frontend --include=dev
+
+# Defensive Pruefung, damit Build nicht spaet mit "Cannot find package" abbricht.
+if ! npm ls @vitejs/plugin-react --workspace=frontend --depth=0 >/dev/null 2>&1; then
+  echo "FEHLER: @vitejs/plugin-react wurde nicht installiert."
+  echo "Bitte npm-Config auf dem Server pruefen (omit/include/prod)."
+  exit 1
+fi
+
+npm run build --workspace=frontend
 
 echo "6) Frontend Deploy nach /var/www/html/fabu"
 sudo rm -rf /var/www/html/fabu
