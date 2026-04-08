@@ -78,19 +78,22 @@ if [ "${DB_CLIENT:-sqlite}" = "postgres" ] && [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 echo "4) Backend installieren"
-cd backend
-npm install --production
+# Workspace-sicher: Backend ohne devDependencies installieren.
+cd ..
+NPM_CONFIG_PRODUCTION=true NPM_CONFIG_OMIT=dev npm install --workspace=backend --omit=dev
 
 echo "5) Frontend installieren und bauen"
-cd ..
 # Workspace-Install erzwingen und devDependencies trotz NODE_ENV=production mitnehmen,
 # da der Vite-Build @vitejs/plugin-react aus devDependencies benoetigt.
-NPM_CONFIG_PRODUCTION=false npm install --workspace=frontend --include=dev
+NPM_CONFIG_PRODUCTION=false NPM_CONFIG_OMIT= NPM_CONFIG_INCLUDE=dev npm install --workspace=frontend --include=dev
 
 # Defensive Pruefung, damit Build nicht spaet mit "Cannot find package" abbricht.
 if ! npm ls @vitejs/plugin-react --workspace=frontend --depth=0 >/dev/null 2>&1; then
   echo "FEHLER: @vitejs/plugin-react wurde nicht installiert."
   echo "Bitte npm-Config auf dem Server pruefen (omit/include/prod)."
+  npm config get production || true
+  npm config get omit || true
+  npm config get include || true
   exit 1
 fi
 
@@ -135,7 +138,7 @@ if [ "${DB_CLIENT:-sqlite}" = "postgres" ] && [ -f "$SQLITE_DB" ]; then
 fi
 
 echo "7) Backend mit pm2 neu starten"
-cd ../backend
+cd backend
 if pm2 describe fabu-backend >/dev/null 2>&1; then
   pm2 restart fabu-backend
 else
