@@ -79,12 +79,13 @@ fi
 
 echo "4) Backend installieren"
 # Workspace-sicher: Backend ohne devDependencies installieren.
-cd ..
-NPM_CONFIG_PRODUCTION=true NPM_CONFIG_OMIT=dev npm install --workspace=backend --omit=dev
+cd /home/deploy/FaBu
+NPM_CONFIG_OMIT=dev npm install --workspace=backend --omit=dev
 
 echo "5) Frontend installieren und bauen"
 # Workspace-Install erzwingen und devDependencies trotz NODE_ENV=production mitnehmen,
 # da der Vite-Build @vitejs/plugin-react aus devDependencies benoetigt.
+cd /home/deploy/FaBu
 NPM_CONFIG_PRODUCTION=false NPM_CONFIG_OMIT= NPM_CONFIG_INCLUDE=dev npm install --workspace=frontend --include=dev
 
 # Defensive Pruefung, damit Build nicht spaet mit "Cannot find package" abbricht.
@@ -102,7 +103,7 @@ npm run build --workspace=frontend
 echo "6) Frontend Deploy nach /var/www/html/fabu"
 sudo rm -rf /var/www/html/fabu
 sudo mkdir -p /var/www/html/fabu
-sudo cp -r dist/* /var/www/html/fabu/
+sudo cp -r frontend/dist/* /var/www/html/fabu/
 sudo chown -R www-data:www-data /var/www/html/fabu
 sudo chmod -R 755 /var/www/html/fabu
 
@@ -130,7 +131,7 @@ if [ "${DB_CLIENT:-sqlite}" = "postgres" ] && [ -f "$SQLITE_DB" ]; then
     sqlite3 "$SQLITE_DB" ".backup '$BACKUP_PATH'"
     chmod 600 "$BACKUP_PATH"
 
-    SQLITE_DB_PATH="$BACKUP_PATH" npm run migrate:sqlite-to-postgres
+    SQLITE_DB_PATH="$BACKUP_PATH" npm run migrate:sqlite-to-postgres --workspace=backend
     touch "$SQLITE_MIGRATION_MARKER"
   else
     echo "6b) SQLite-Migration bereits abgeschlossen, ueberspringe Import"
@@ -138,6 +139,7 @@ if [ "${DB_CLIENT:-sqlite}" = "postgres" ] && [ -f "$SQLITE_DB" ]; then
 fi
 
 echo "7) Backend mit pm2 neu starten"
+cd /home/deploy/FaBu
 cd backend
 if pm2 describe fabu-backend >/dev/null 2>&1; then
   pm2 restart fabu-backend
