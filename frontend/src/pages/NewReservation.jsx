@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Car, Calendar, Clock, FileText, CheckCircle2 } from 'lucide-react';
 import { api } from '../api/client';
 import {
@@ -9,12 +9,15 @@ import {
   formatReservationHourRange,
   RESERVATION_HOUR_END,
   RESERVATION_HOUR_START,
+  vehicleImageUrl,
   vehicleTypeIcon,
 } from '../utils/helpers';
 
 export default function NewReservation() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState([]);
+  const [vehiclesLoaded, setVehiclesLoaded] = useState(false);
   const [form, setForm] = useState({
     vehicle_id: '',
     date: new Date().toISOString().slice(0, 10),
@@ -31,9 +34,30 @@ export default function NewReservation() {
   const [error, setError] = useState('');
   const [dragSelection, setDragSelection] = useState(null);
   const dragPointerIdRef = useRef(null);
+  const preselectionAppliedRef = useRef(false);
   const reservableVehicles = vehicles.filter((v) => Boolean(v.active));
 
-  useEffect(() => { api.get('/vehicles').then(setVehicles); }, []);
+  useEffect(() => {
+    api.get('/vehicles')
+      .then(setVehicles)
+      .finally(() => setVehiclesLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (preselectionAppliedRef.current || !vehiclesLoaded) return;
+
+    preselectionAppliedRef.current = true;
+    const preselectedVehicleId = searchParams.get('vehicleId');
+    if (!preselectedVehicleId) return;
+
+    const preselectedVehicle = reservableVehicles.find((vehicle) => String(vehicle.id) === preselectedVehicleId);
+    if (!preselectedVehicle) return;
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      vehicle_id: String(preselectedVehicle.id),
+    }));
+  }, [reservableVehicles, searchParams, vehiclesLoaded]);
 
   useEffect(() => {
     if (!form.vehicle_id || !form.date) {
@@ -276,7 +300,17 @@ export default function NewReservation() {
                     onChange={set('vehicle_id')}
                     className="accent-indigo-600"
                   />
-                  <span className="text-xl">{vehicleTypeIcon(v.type)}</span>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                    {v.image_path ? (
+                      <img
+                        src={vehicleImageUrl(v.image_path)}
+                        alt={`Fahrzeug ${v.name}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xl">{vehicleTypeIcon(v.type)}</span>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 text-sm">{v.name}</p>
                     <p className="text-xs text-gray-500 font-mono">{v.license_plate} · {v.type}</p>

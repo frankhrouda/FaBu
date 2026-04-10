@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Car, Plus, Pencil, PowerOff, Power, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +19,7 @@ const emptyForm = {
 };
 
 export default function Vehicles() {
+  const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const { toasts, show, dismiss } = useToast();
 
@@ -143,6 +145,10 @@ export default function Vehicles() {
     }
   };
 
+  const startReservation = (vehicleId) => {
+    navigate(`/reservations/new?vehicleId=${vehicleId}`);
+  };
+
   return (
     <div className="p-4 space-y-4">
       <ToastContainer toasts={toasts} dismiss={dismiss} />
@@ -208,37 +214,51 @@ export default function Vehicles() {
                     </div>
                   )}
                 </div>
-                {isAdmin && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => openEdit(v)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                      title="Bearbeiten"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => toggleActive(v)}
-                      className={`p-2 rounded-lg transition-colors ${
-                        v.active
-                          ? 'text-gray-400 hover:text-red-500 hover:bg-red-50'
-                          : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'
-                      }`}
-                      title={v.active ? 'Deaktivieren' : 'Aktivieren'}
-                    >
-                      {v.active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
-                    </button>
-                    {!v.active && (
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startReservation(v.id)}
+                    disabled={!v.active}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      v.active
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'cursor-not-allowed bg-gray-100 text-gray-400'
+                    }`}
+                  >
+                    Auswaehlen
+                  </button>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => permanentDelete(v)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Permanent loeschen"
+                        onClick={() => openEdit(v)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                        title="Bearbeiten"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Pencil className="w-4 h-4" />
                       </button>
-                    )}
-                  </div>
-                )}
+                      <button
+                        onClick={() => toggleActive(v)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          v.active
+                            ? 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                            : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'
+                        }`}
+                        title={v.active ? 'Deaktivieren' : 'Aktivieren'}
+                      >
+                        {v.active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                      </button>
+                      {!v.active && (
+                        <button
+                          onClick={() => permanentDelete(v)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Permanent loeschen"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}
