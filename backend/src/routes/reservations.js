@@ -92,11 +92,12 @@ router.get('/', authenticate, async (req, res) => {
   if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
   try {
     const isAdmin = req.user.super_admin || req.tenantRole === 'admin';
+    const reservationOrderBy = 'ORDER BY r.created_at DESC, r.id DESC';
     const reservations = req.user.super_admin && !req.tenantId
-      ? await db.queryMany(`${WITH_DETAILS} ORDER BY r.date DESC, r.time_from DESC`, [])
+      ? await db.queryMany(`${WITH_DETAILS} ${reservationOrderBy}`, [])
       : isAdmin
-        ? await db.queryMany(`${WITH_DETAILS} WHERE v.tenant_id = ? ORDER BY r.date DESC, r.time_from DESC`, [req.tenantId])
-        : await db.queryMany(`${WITH_DETAILS} WHERE r.user_id = ? AND v.tenant_id = ? ORDER BY r.date DESC, r.time_from DESC`, [req.user.id, req.tenantId]);
+        ? await db.queryMany(`${WITH_DETAILS} WHERE v.tenant_id = ? ${reservationOrderBy}`, [req.tenantId])
+        : await db.queryMany(`${WITH_DETAILS} WHERE r.user_id = ? AND v.tenant_id = ? ${reservationOrderBy}`, [req.user.id, req.tenantId]);
     res.json(reservations);
   } catch (err) {
     console.error(err);

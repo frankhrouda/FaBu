@@ -122,6 +122,90 @@ describe('API integration: auth, tenant roles, invitations', () => {
     expect(registerInviteRes.body.user.active_tenant_id).toBe(alphaTenantId);
   });
 
+  it('returns vehicles alphabetically and reservations with newest first', async () => {
+    const vehiclePayloads = [
+      {
+        name: 'zeta transporter',
+        license_plate: 'FAB-SORT-003',
+        type: 'Transporter',
+        description: 'Sort test 3',
+      },
+      {
+        name: 'Alpha Car',
+        license_plate: 'FAB-SORT-001',
+        type: 'PKW',
+        description: 'Sort test 1',
+      },
+      {
+        name: 'beta van',
+        license_plate: 'FAB-SORT-002',
+        type: 'LKW',
+        description: 'Sort test 2',
+      },
+    ];
+
+    const createdVehicles = [];
+    for (const payload of vehiclePayloads) {
+      const createVehicleRes = await request(app)
+        .post('/api/vehicles')
+        .set('Authorization', `Bearer ${alphaAdminToken}`)
+        .send(payload)
+        .expect(201);
+      createdVehicles.push(createVehicleRes.body);
+    }
+
+    const vehiclesRes = await request(app)
+      .get('/api/vehicles')
+      .set('Authorization', `Bearer ${alphaAdminToken}`)
+      .expect(200);
+
+    const createdVehicleNamesInOrder = vehiclesRes.body
+      .filter((vehicle) => vehicle.license_plate?.startsWith('FAB-SORT-'))
+      .map((vehicle) => vehicle.name);
+
+    expect(createdVehicleNamesInOrder).toEqual(['Alpha Car', 'beta van', 'zeta transporter']);
+
+    const reservationOneRes = await request(app)
+      .post('/api/reservations')
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .send({
+        vehicle_id: createdVehicles[0].id,
+        date: '2030-12-30',
+        date_to: '2030-12-30',
+        time_from: '08:00',
+        time_to: '10:00',
+        reason: 'Sort old date created first',
+      })
+      .expect(201);
+
+    const reservationTwoRes = await request(app)
+      .post('/api/reservations')
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .send({
+        vehicle_id: createdVehicles[1].id,
+        date: '2030-01-05',
+        date_to: '2030-01-05',
+        time_from: '09:00',
+        time_to: '11:00',
+        reason: 'Sort newer creation but earlier trip date',
+      })
+      .expect(201);
+
+    const reservationsRes = await request(app)
+      .get('/api/reservations')
+      .set('Authorization', `Bearer ${alphaAdminToken}`)
+      .expect(200);
+
+    const createdReservationIdsInOrder = reservationsRes.body
+      .filter((reservation) => reservation.reason?.startsWith('Sort '))
+      .map((reservation) => reservation.id);
+
+    expect(createdReservationIdsInOrder).toEqual([
+      reservationTwoRes.body.id,
+      reservationOneRes.body.id,
+    ]);
+  });
+
   it('forbids non-superadmin from creating tenants under /admin', async () => {
     const forbidden = await request(app)
       .post('/api/admin/tenants')

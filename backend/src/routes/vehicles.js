@@ -72,11 +72,12 @@ router.get('/', authenticate, async (req, res) => {
   if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
   try {
     const isAdmin = req.user.super_admin || req.tenantRole === 'admin';
+    const vehicleOrderBy = 'ORDER BY LOWER(name) ASC, name ASC, id ASC';
     const vehicles = req.user.super_admin && !req.tenantId
-      ? await db.queryMany('SELECT * FROM vehicles ORDER BY active DESC, name', [])
+      ? await db.queryMany(`SELECT * FROM vehicles ${vehicleOrderBy}`, [])
       : isAdmin
-        ? await db.queryMany('SELECT * FROM vehicles WHERE tenant_id = ? ORDER BY active DESC, name', [req.tenantId])
-        : await db.queryMany('SELECT * FROM vehicles WHERE active = TRUE AND tenant_id = ? ORDER BY name', [req.tenantId]);
+        ? await db.queryMany(`SELECT * FROM vehicles WHERE tenant_id = ? ${vehicleOrderBy}`, [req.tenantId])
+        : await db.queryMany(`SELECT * FROM vehicles WHERE active = TRUE AND tenant_id = ? ${vehicleOrderBy}`, [req.tenantId]);
     res.json(vehicles);
   } catch (err) {
     console.error(err);

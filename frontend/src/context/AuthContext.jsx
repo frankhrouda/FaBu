@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { SESSION_NOTICE_STORAGE_KEY, SESSION_TIMEOUT_MESSAGE } from '../api/client';
 
 const AuthContext = createContext(null);
 
@@ -8,6 +9,18 @@ export function AuthProvider({ children }) {
   const [availableTenants, setAvailableTenants] = useState([]);
   const [switchingTenant, setSwitchingTenant] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const decodeJwtPayload = (jwtToken) => {
+    try {
+      const encoded = jwtToken.split('.')[1];
+      if (!encoded) return null;
+      const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+      return JSON.parse(atob(padded));
+    } catch {
+      return null;
+    }
+  };
 
   const normalizeAuthState = (nextUser, nextTenants = []) => {
     const activeTenant = nextTenants.find((t) => t.id === nextUser?.active_tenant_id) || null;
@@ -44,6 +57,7 @@ export function AuthProvider({ children }) {
 
   const login = (token, user, tenants = []) => {
     const normalizedUser = normalizeAuthState(user, tenants);
+    localStorage.removeItem(SESSION_NOTICE_STORAGE_KEY);
     localStorage.setItem('fabu_token', token);
     localStorage.setItem('fabu_user', JSON.stringify(normalizedUser));
     localStorage.setItem('fabu_tenants', JSON.stringify(tenants));
@@ -70,6 +84,13 @@ export function AuthProvider({ children }) {
 
       const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
       if (!response.ok) {
+        if (response.status === 401 && token) {
+          localStorage.setItem(SESSION_NOTICE_STORAGE_KEY, SESSION_TIMEOUT_MESSAGE);
+          window.dispatchEvent(new CustomEvent('fabu:session-expired', {
+            detail: { message: SESSION_TIMEOUT_MESSAGE },
+          }));
+          throw new Error(SESSION_TIMEOUT_MESSAGE);
+        }
         throw new Error(data.error || `HTTP ${response.status}`);
       }
 
@@ -84,7 +105,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = ({ sessionExpired = false } = {}) => {
+    if (!sessionExpired) {
+      localStorage.removeItem(SESSION_NOTICE_STORAGE_KEY);
+    }
     localStorage.removeItem('fabu_token');
     localStorage.removeItem('fabu_user');
     localStorage.removeItem('fabu_tenants');
@@ -92,6 +116,48 @@ export function AuthProvider({ children }) {
     setUser(null);
     setAvailableTenants([]);
   };
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      if (!localStorage.getItem(SESSION_NOTICE_STORAGE_KEY)) {
+        localStorage.setItem(SESSION_NOTICE_STORAGE_KEY, SESSION_TIMEOUT_MESSAGE);
+      }
+      logout({ sessionExpired: true });
+    };
+
+    window.addEventListener('fabu:session-expired', onSessionExpired);
+    return () => window.removeEventListener('fabu:session-expired', onSessionExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const payload = decodeJwtPayload(token);
+    const expMs = Number(payload?.exp) * 1000;
+    if (!Number.isFinite(expMs)) return undefined;
+
+    const timeoutMs = expMs - Date.now();
+    if (timeoutMs <= 0) {
+      if (!localStorage.getItem(SESSION_NOTICE_STORAGE_KEY)) {
+        localStorage.setItem(SESSION_NOTICE_STORAGE_KEY, SESSION_TIMEOUT_MESSAGE);
+      }
+      window.dispatchEvent(new CustomEvent('fabu:session-expired', {
+        detail: { message: SESSION_TIMEOUT_MESSAGE },
+      }));
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      if (!localStorage.getItem(SESSION_NOTICE_STORAGE_KEY)) {
+        localStorage.setItem(SESSION_NOTICE_STORAGE_KEY, SESSION_TIMEOUT_MESSAGE);
+      }
+      window.dispatchEvent(new CustomEvent('fabu:session-expired', {
+        detail: { message: SESSION_TIMEOUT_MESSAGE },
+      }));
+    }, timeoutMs);
+
+    return () => window.clearTimeout(timerId);
+  }, [token]);
 
   return (
     <AuthContext.Provider

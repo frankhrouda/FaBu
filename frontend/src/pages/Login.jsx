@@ -1,15 +1,29 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Car, Mail, Lock, LogIn } from 'lucide-react';
-import { api } from '../api/client';
+import { api, SESSION_NOTICE_STORAGE_KEY, SESSION_TIMEOUT_MESSAGE } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [sessionNotice, setSessionNotice] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const persistedNotice = localStorage.getItem(SESSION_NOTICE_STORAGE_KEY);
+    if (persistedNotice) {
+      setSessionNotice(persistedNotice);
+      return;
+    }
+
+    if (location.state?.sessionExpired) {
+      setSessionNotice(SESSION_TIMEOUT_MESSAGE);
+    }
+  }, [location.state]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -48,6 +62,15 @@ export default function Login() {
             <div className="flex items-start gap-2 bg-red-50 text-red-700 text-sm px-3 py-2.5 rounded-lg mb-4 border border-red-200">
               <span className="mt-0.5 shrink-0">⚠️</span>
               <span>{error}</span>
+            </div>
+          )}
+
+          {sessionNotice && (
+            <div className="bg-amber-50 text-amber-900 text-sm px-3 py-2.5 rounded-lg mb-4 border border-amber-200">
+              <p>{sessionNotice}</p>
+              <Link to="/login" className="mt-1 inline-block text-amber-900 underline font-medium">
+                Zur Anmeldemaske
+              </Link>
             </div>
           )}
 

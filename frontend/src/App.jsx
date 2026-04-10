@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SESSION_NOTICE_STORAGE_KEY } from './api/client';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -17,7 +18,9 @@ import ResetPassword from './pages/ResetPassword';
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>;
-  return user ? children : <Navigate to="/login" replace />;
+  if (user) return children;
+  const sessionExpired = Boolean(localStorage.getItem(SESSION_NOTICE_STORAGE_KEY));
+  return <Navigate to="/login" replace state={{ sessionExpired }} />;
 }
 
 function AdminRoute({ children }) {
