@@ -42,7 +42,7 @@ function requireTenantContext(req, res, { allowSuperAdminWithoutTenant = false }
 
 const WITH_DETAILS = `
   SELECT r.*, u.name as user_name, u.email as user_email,
-         v.name as vehicle_name, v.license_plate
+         v.name as vehicle_name, v.license_plate, v.image_path as vehicle_image_path
   FROM reservations r
   JOIN users u ON r.user_id = u.id
   JOIN vehicles v ON r.vehicle_id = v.id

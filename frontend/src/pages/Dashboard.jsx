@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import { useToast, ToastContainer } from '../components/Toast';
-import { statusBadge, formatDate, formatDateRange, formatKm } from '../utils/helpers';
+import { statusBadge, formatDate, formatDateRange, formatKm, vehicleImageUrl } from '../utils/helpers';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -255,8 +255,21 @@ function ReservationPreview({ reservation: r, onComplete, onCancel }) {
                 Reserviert
               </span>
             </div>
-            <p className="font-semibold text-gray-900 truncate">{r.vehicle_name}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{r.license_plate}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              {r.vehicle_image_path && (
+                <div className="w-9 h-9 rounded-md border border-gray-200 bg-gray-50 overflow-hidden shrink-0">
+                  <img
+                    src={vehicleImageUrl(r.vehicle_image_path)}
+                    alt={`Fahrzeug ${r.vehicle_name}`}
+                    className="w-full h-full object-contain p-0.5"
+                  />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 truncate">{r.vehicle_name}</p>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">{r.license_plate}</p>
+              </div>
+            </div>
           </div>
           <div className="text-right shrink-0">
             <p className="text-sm font-medium text-gray-700">{formatDateRange(r.date, r.date_to)}</p>

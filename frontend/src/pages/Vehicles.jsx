@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import { useToast, ToastContainer } from '../components/Toast';
-import { vehicleTypeIcon } from '../utils/helpers';
+import { vehicleImageUrl, vehicleTypeIcon } from '../utils/helpers';
 
 const VEHICLE_TYPES = ['PKW', 'LKW', 'Transporter', 'Motorrad', 'Sonstiges'];
 
@@ -16,24 +16,6 @@ const emptyForm = {
   price_per_km: '0',
   flat_fee: '',
 };
-
-function vehicleImageUrl(imagePath) {
-  if (!imagePath) return null;
-  if (/^https?:\/\//i.test(imagePath)) return imagePath;
-  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
-  let normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-
-  if (normalizedPath.startsWith('/uploads/')) {
-    normalizedPath = `/api${normalizedPath}`;
-  }
-
-  if (/^https?:\/\//i.test(apiBase)) {
-    const apiOrigin = apiBase.replace(/\/api\/?$/, '');
-    return `${apiOrigin}${normalizedPath}`;
-  }
-
-  return normalizedPath;
-}
 
 export default function Vehicles() {
   const { isAdmin } = useAuth();
@@ -217,11 +199,13 @@ export default function Vehicles() {
                   </p>
                   {v.description && <p className="text-xs text-gray-500 mt-1">{v.description}</p>}
                   {v.image_path && (
-                    <img
-                      src={vehicleImageUrl(v.image_path)}
-                      alt={`Fahrzeug ${v.name}`}
-                      className="mt-2 w-full max-w-xs h-24 rounded-lg object-cover border border-gray-200"
-                    />
+                    <div className="mt-2 w-full max-w-xs h-24 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                      <img
+                        src={vehicleImageUrl(v.image_path)}
+                        alt={`Fahrzeug ${v.name}`}
+                        className="w-full h-full object-contain p-1"
+                      />
+                    </div>
                   )}
                 </div>
                 {isAdmin && (

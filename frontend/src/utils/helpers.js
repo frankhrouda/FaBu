@@ -60,3 +60,22 @@ export function vehicleTypeIcon(type) {
     default: return '🚗';
   }
 }
+
+export function vehicleImageUrl(imagePath) {
+  if (!imagePath) return null;
+  if (/^https?:\/\//i.test(imagePath)) return imagePath;
+
+  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+  let normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+
+  if (normalizedPath.startsWith('/uploads/')) {
+    normalizedPath = `/api${normalizedPath}`;
+  }
+
+  if (/^https?:\/\//i.test(apiBase)) {
+    const apiOrigin = apiBase.replace(/\/api\/?$/, '');
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  return normalizedPath;
+}

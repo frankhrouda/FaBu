@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import { useToast, ToastContainer } from '../components/Toast';
-import { statusBadge, statusLabel, formatDate, formatDateRange, formatKm } from '../utils/helpers';
+import { statusBadge, statusLabel, formatDate, formatDateRange, formatKm, vehicleImageUrl } from '../utils/helpers';
 
 const FILTERS = ['Alle', 'Reserviert', 'Abgeschlossen', 'Storniert'];
 const filterMap = { 'Alle': null, 'Reserviert': 'reserved', 'Abgeschlossen': 'completed', 'Storniert': 'cancelled' };
@@ -205,8 +205,21 @@ function ReservationCard({ reservation: r, showUser, onComplete, onCancel }) {
                 <span className="text-xs text-gray-500">{r.user_name}</span>
               )}
             </div>
-            <p className="font-semibold text-gray-900">{r.vehicle_name}</p>
-            <p className="text-xs text-gray-400 font-mono">{r.license_plate}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              {r.vehicle_image_path && (
+                <div className="w-10 h-10 rounded-md border border-gray-200 bg-gray-50 overflow-hidden shrink-0">
+                  <img
+                    src={vehicleImageUrl(r.vehicle_image_path)}
+                    alt={`Fahrzeug ${r.vehicle_name}`}
+                    className="w-full h-full object-contain p-0.5"
+                  />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 truncate">{r.vehicle_name}</p>
+                <p className="text-xs text-gray-400 font-mono truncate">{r.license_plate}</p>
+              </div>
+            </div>
           </div>
           <div className="text-right shrink-0">
             <p className="text-sm font-medium text-gray-700">{formatDateRange(r.date, r.date_to)}</p>
