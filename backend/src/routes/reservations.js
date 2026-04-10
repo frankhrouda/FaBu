@@ -178,7 +178,7 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     const { lastInsertId, row } = await db.execute(
-      'INSERT INTO reservations (user_id, vehicle_id, date, date_to, time_from, time_to, reason, reminder_minutes_before, reminder_at_utc, reminder_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO reservations (user_id, vehicle_id, date, date_to, time_from, time_to, reason, reminder_minutes_before, reminder_at_utc, reminder_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
       [
         req.user.id,
         vehicle_id,
@@ -195,6 +195,11 @@ router.post('/', authenticate, async (req, res) => {
     const id = row?.id ?? lastInsertId;
 
     const reservation = await db.queryOne(`${WITH_DETAILS} WHERE r.id = ?`, [id]);
+
+    if (!reservation) {
+      console.error('[reservations.create] Insert erfolgreich, aber Datensatz konnte nicht geladen werden', { id, userId: req.user.id, vehicle_id });
+      return res.status(500).json({ error: 'Fehler beim Erstellen der Reservierung' });
+    }
 
     sendMail({
       to: reservation.user_email,
