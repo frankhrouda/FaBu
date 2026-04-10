@@ -16,7 +16,9 @@ export default function Reservations() {
 
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('Alle');
+  const [filter, setFilter] = useState('Reserviert');
+  const [sortBy, setSortBy] = useState('trip_start');
+  const [sortDirection, setSortDirection] = useState('asc');
   const [completeModal, setCompleteModal] = useState(null);
   const [completeForm, setCompleteForm] = useState({ km_driven: '', destination: '' });
   const [saving, setSaving] = useState(false);
@@ -26,9 +28,29 @@ export default function Reservations() {
 
   useEffect(() => { load(); }, []);
 
+  const toTimestamp = (value) => {
+    if (!value) return 0;
+    const normalized = String(value).includes('T') ? String(value) : String(value).replace(' ', 'T');
+    const parsed = Date.parse(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const getTripStartTimestamp = (reservation) => toTimestamp(`${reservation.date}T${reservation.time_from}`);
+  const getCreatedTimestamp = (reservation) => toTimestamp(reservation.created_at);
+
   const filtered = filter === 'Alle'
     ? reservations
     : reservations.filter((r) => r.status === filterMap[filter]);
+
+  const sortedReservations = [...filtered].sort((a, b) => {
+    const valueA = sortBy === 'created_at' ? getCreatedTimestamp(a) : getTripStartTimestamp(a);
+    const valueB = sortBy === 'created_at' ? getCreatedTimestamp(b) : getTripStartTimestamp(b);
+    const diff = valueA - valueB;
+    if (diff !== 0) {
+      return sortDirection === 'asc' ? diff : -diff;
+    }
+    return sortDirection === 'asc' ? a.id - b.id : b.id - a.id;
+  });
 
   const handleComplete = async (e) => {
     e.preventDefault();
@@ -93,6 +115,39 @@ export default function Reservations() {
         ))}
       </div>
 
+      <div className="flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl px-3 py-2">
+        <label className="flex items-center gap-2 text-sm text-gray-600 min-w-0">
+          <span className="shrink-0">Sortierung:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white min-w-0"
+          >
+            <option value="trip_start">nach Datum/Zeit der reservierten Fahrt</option>
+            <option value="created_at">nach Anlagedatum der Reservierung</option>
+          </select>
+        </label>
+
+        <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
+          <button
+            onClick={() => setSortDirection('desc')}
+            className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+              sortDirection === 'desc' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600'
+            }`}
+          >
+            absteigend
+          </button>
+          <button
+            onClick={() => setSortDirection('asc')}
+            className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+              sortDirection === 'asc' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600'
+            }`}
+          >
+            aufsteigend
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => <div key={i} className="bg-gray-200 animate-pulse h-32 rounded-xl" />)}
@@ -107,7 +162,7 @@ export default function Reservations() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((r) => (
+          {sortedReservations.map((r) => (
             <ReservationCard
               key={r.id}
               reservation={r}
