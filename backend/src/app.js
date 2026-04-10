@@ -12,6 +12,7 @@ import reservationRoutes from './routes/reservations.js';
 import tenantRoutes from './routes/tenants.js';
 import userRoutes from './routes/users.js';
 import waitlistRoutes from './routes/waitlist.js';
+import { BACKEND_VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsDir = path.join(__dirname, '../data/uploads');
@@ -90,6 +91,10 @@ export async function createApp() {
   app.use('/api', apiLimiter);
   app.use('/api/uploads', express.static(uploadsDir));
   app.use('/uploads', express.static(uploadsDir));
+
+  app.get('/api/version', (_req, res) => {
+    res.json({ backend_version: BACKEND_VERSION });
+  });
 
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminTenantRoutes);

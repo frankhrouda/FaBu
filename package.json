@@ -12,6 +12,9 @@
     "dev:landing": "npm run dev --workspace=landing",
     "build:landing": "npm run build --workspace=landing",
     "install:all": "npm install",
+    "version:bump": "node scripts/bump-app-versions.mjs",
+    "version:major": "node scripts/bump-app-versions.mjs --major",
+    "hooks:install": "git config core.hooksPath .githooks",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
   },

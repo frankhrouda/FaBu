@@ -1,14 +1,36 @@
+import { useEffect, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import BottomNav from './BottomNav';
 import { Car, LogOut } from 'lucide-react';
+import { FRONTEND_VERSION } from '../version';
 
 export default function Layout() {
   const { user, logout, isAdmin, availableTenants, activeTenantId } = useAuth();
   const navigate = useNavigate();
+  const [backendVersion, setBackendVersion] = useState('-');
   
   const activeTenant = availableTenants?.find(t => t.id === activeTenantId);
   const tenantName = activeTenant?.name;
+
+  useEffect(() => {
+    let active = true;
+
+    fetch('/api/version')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        setBackendVersion(data?.backend_version || '-');
+      })
+      .catch(() => {
+        if (!active) return;
+        setBackendVersion('-');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen max-w-lg mx-auto">
@@ -45,9 +67,13 @@ export default function Layout() {
       </header>
 
       {/* Page content */}
-      <main className="flex-1 pt-16 pb-20 overflow-y-auto">
+      <main className="flex-1 pt-16 pb-24 overflow-y-auto">
         <Outlet />
       </main>
+
+      <div className="fixed bottom-14 left-0 right-0 z-30 text-center text-[11px] text-gray-400 max-w-lg mx-auto pointer-events-none">
+        Frontend v{FRONTEND_VERSION} | Backend v{backendVersion}
+      </div>
 
       {/* Bottom navigation */}
       <BottomNav />
