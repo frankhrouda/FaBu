@@ -142,6 +142,9 @@ const SQLITE_SCHEMA = `
     reason TEXT NOT NULL,
     km_driven INTEGER,
     destination TEXT,
+    vehicle_rating INTEGER,
+    vehicle_rating_comment TEXT,
+    vehicle_rated_at TEXT,
     status TEXT NOT NULL DEFAULT 'reserved',
     reminder_minutes_before INTEGER DEFAULT 60,
     reminder_at_utc TEXT,
@@ -270,6 +273,9 @@ const PG_SCHEMA = `
     reason TEXT NOT NULL,
     km_driven INTEGER,
     destination TEXT,
+    vehicle_rating INTEGER,
+    vehicle_rating_comment TEXT,
+    vehicle_rated_at TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'reserved',
     reminder_minutes_before INTEGER DEFAULT 60,
     reminder_at_utc TIMESTAMPTZ,
@@ -362,6 +368,9 @@ async function ensurePgMigrations() {
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS flat_fee DOUBLE PRECISION');
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_path TEXT');
   await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS date_to DATE');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS vehicle_rating INTEGER');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS vehicle_rating_comment TEXT');
+  await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS vehicle_rated_at TIMESTAMPTZ');
   await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_minutes_before INTEGER DEFAULT 60');
   await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_at_utc TIMESTAMPTZ');
   await getPool().query('ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ');
@@ -369,6 +378,7 @@ async function ensurePgMigrations() {
   await getPool().query('ALTER TABLE users ADD COLUMN IF NOT EXISTS super_admin BOOLEAN NOT NULL DEFAULT FALSE');
   await getPool().query('ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)');
   await getPool().query('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
+  await getPool().query("UPDATE reservations SET vehicle_rating = 5, vehicle_rated_at = COALESCE(vehicle_rated_at, created_at, NOW()) WHERE status = 'completed' AND vehicle_rating IS NULL");
 
   const defaultTenantName = process.env.DEFAULT_TENANT_NAME || 'Default Tenant';
   const firstUser = await pgQueryOne('SELECT id, role FROM users ORDER BY id ASC LIMIT 1');
@@ -447,6 +457,21 @@ function ensureSqliteMigrations() {
     getSqlite().exec('UPDATE reservations SET date_to = date WHERE date_to IS NULL');
   }
 
+  const hasVehicleRating = columns.some((col) => col.name === 'vehicle_rating');
+  if (!hasVehicleRating) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN vehicle_rating INTEGER');
+  }
+
+  const hasVehicleRatingComment = columns.some((col) => col.name === 'vehicle_rating_comment');
+  if (!hasVehicleRatingComment) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN vehicle_rating_comment TEXT');
+  }
+
+  const hasVehicleRatedAt = columns.some((col) => col.name === 'vehicle_rated_at');
+  if (!hasVehicleRatedAt) {
+    getSqlite().exec('ALTER TABLE reservations ADD COLUMN vehicle_rated_at TEXT');
+  }
+
   const hasReminderMinutesBefore = columns.some((col) => col.name === 'reminder_minutes_before');
   if (!hasReminderMinutesBefore) {
     getSqlite().exec('ALTER TABLE reservations ADD COLUMN reminder_minutes_before INTEGER DEFAULT 60');
@@ -466,6 +491,8 @@ function ensureSqliteMigrations() {
   if (!hasReminderStatus) {
     getSqlite().exec('ALTER TABLE reservations ADD COLUMN reminder_status TEXT DEFAULT \'pending\'');
   }
+
+  getSqlite().exec("UPDATE reservations SET vehicle_rating = 5, vehicle_rated_at = COALESCE(vehicle_rated_at, created_at, CURRENT_TIMESTAMP) WHERE status = 'completed' AND vehicle_rating IS NULL");
 
   const userColumns = getSqlite().prepare("PRAGMA table_info(users)").all();
   const hasSuperAdmin = userColumns.some((col) => col.name === 'super_admin');

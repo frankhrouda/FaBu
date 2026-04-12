@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Users,
   ShieldCheck,
+  Star,
   User,
   Trash2,
   Crown,
@@ -17,6 +18,18 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast, ToastContainer } from '../components/Toast';
 import { formatDate, formatDateRange, formatKm } from '../utils/helpers';
+
+function RatingStars({ value }) {
+  const numericValue = Number(value || 0);
+  return (
+    <div className="flex items-center gap-0.5 text-amber-400">
+      {[1, 2, 3, 4, 5].map((starValue) => {
+        const active = numericValue >= starValue;
+        return <Star key={starValue} className={`h-3 w-3 ${active ? 'fill-current' : 'text-gray-200'}`} />;
+      })}
+    </div>
+  );
+}
 
 function getMonthDateRange(monthValue) {
   if (!monthValue) return { from: '', to: '' };
@@ -844,8 +857,20 @@ export default function Admin() {
                   <div className="mt-2 pt-2 border-t border-gray-50 grid grid-cols-2 gap-2 text-xs text-gray-600">
                     <div><span className="text-gray-400">Fahrer:</span> {r.user_name}</div>
                     <div><span className="text-gray-400">Km:</span> <span className="font-semibold text-emerald-600">{formatKm(r.km_driven)}</span></div>
+                    {r.vehicle_rating ? (
+                      <div className="col-span-2 flex items-center gap-2">
+                        <span className="text-gray-400">Bewertung:</span>
+                        <RatingStars value={r.vehicle_rating} />
+                        <span className="font-semibold text-amber-600">{r.vehicle_rating}/5</span>
+                      </div>
+                    ) : null}
                     <div className="col-span-2"><span className="text-gray-400">Ziel:</span> {r.destination}</div>
                     <div className="col-span-2"><span className="text-gray-400">Grund:</span> {r.reason}</div>
+                    {r.vehicle_rating_comment ? (
+                      <div className="col-span-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-amber-900">
+                        <span className="text-amber-700">Nachricht:</span> {r.vehicle_rating_comment}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))

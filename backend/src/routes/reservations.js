@@ -216,12 +216,22 @@ router.post('/', authenticate, async (req, res) => {
 
 router.patch('/:id/complete', authenticate, async (req, res) => {
   if (requireTenantContext(req, res)) return;
-  const { km_driven, destination } = req.body;
+  const { km_driven, destination, vehicle_rating, vehicle_rating_comment } = req.body;
   if (!km_driven || !destination) {
     return res.status(400).json({ error: 'Kilometer und Zielort sind erforderlich' });
   }
   if (km_driven < 1) {
     return res.status(400).json({ error: 'Kilometer muss größer als 0 sein' });
+  }
+
+  const normalizedRating = Number(vehicle_rating);
+  if (!Number.isInteger(normalizedRating) || normalizedRating < 1 || normalizedRating > 5) {
+    return res.status(400).json({ error: 'Bewertung muss zwischen 1 und 5 Sternen liegen' });
+  }
+
+  const normalizedComment = String(vehicle_rating_comment || '').trim();
+  if (normalizedComment.length > 2000) {
+    return res.status(400).json({ error: 'Kommentar darf maximal 2000 Zeichen lang sein' });
   }
 
   try {
@@ -242,8 +252,15 @@ router.patch('/:id/complete', authenticate, async (req, res) => {
     }
 
     await db.execute(
-      "UPDATE reservations SET km_driven=?, destination=?, status='completed' WHERE id=?",
-      [Number(km_driven), destination.trim(), req.params.id]
+      "UPDATE reservations SET km_driven=?, destination=?, vehicle_rating=?, vehicle_rating_comment=?, vehicle_rated_at=?, status='completed' WHERE id=?",
+      [
+        Number(km_driven),
+        destination.trim(),
+        normalizedRating,
+        normalizedComment || null,
+        new Date().toISOString(),
+        req.params.id,
+      ]
     );
 
     const updated = await db.queryOne(`${WITH_DETAILS} WHERE r.id = ?`, [req.params.id]);

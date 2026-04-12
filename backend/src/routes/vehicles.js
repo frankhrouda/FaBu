@@ -68,16 +68,31 @@ function requireTenantContext(req, res, { allowSuperAdminWithoutTenant = false }
   return false;
 }
 
+const WITH_RATINGS = `
+  SELECT v.*,
+         COALESCE(ratings.average_rating, 0) AS average_rating,
+         COALESCE(ratings.rating_count, 0) AS rating_count
+  FROM vehicles v
+  LEFT JOIN (
+    SELECT vehicle_id,
+           ROUND(AVG(vehicle_rating), 2) AS average_rating,
+           COUNT(vehicle_rating) AS rating_count
+    FROM reservations
+    WHERE vehicle_rating IS NOT NULL
+    GROUP BY vehicle_id
+  ) ratings ON ratings.vehicle_id = v.id
+`;
+
 router.get('/', authenticate, async (req, res) => {
   if (requireTenantContext(req, res, { allowSuperAdminWithoutTenant: true })) return;
   try {
     const isAdmin = req.user.super_admin || req.tenantRole === 'admin';
     const vehicleOrderBy = 'ORDER BY LOWER(name) ASC, name ASC, id ASC';
     const vehicles = req.user.super_admin && !req.tenantId
-      ? await db.queryMany(`SELECT * FROM vehicles ${vehicleOrderBy}`, [])
+      ? await db.queryMany(`${WITH_RATINGS} ${vehicleOrderBy}`, [])
       : isAdmin
-        ? await db.queryMany(`SELECT * FROM vehicles WHERE tenant_id = ? ${vehicleOrderBy}`, [req.tenantId])
-        : await db.queryMany(`SELECT * FROM vehicles WHERE active = TRUE AND tenant_id = ? ${vehicleOrderBy}`, [req.tenantId]);
+        ? await db.queryMany(`${WITH_RATINGS} WHERE v.tenant_id = ? ${vehicleOrderBy}`, [req.tenantId])
+        : await db.queryMany(`${WITH_RATINGS} WHERE v.active = TRUE AND v.tenant_id = ? ${vehicleOrderBy}`, [req.tenantId]);
     res.json(vehicles);
   } catch (err) {
     console.error(err);

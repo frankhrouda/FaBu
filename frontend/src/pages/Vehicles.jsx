@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Car, Plus, Pencil, PowerOff, Power, Trash2 } from 'lucide-react';
+import { Car, Plus, Pencil, PowerOff, Power, Star, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
@@ -8,6 +8,24 @@ import { useToast, ToastContainer } from '../components/Toast';
 import { vehicleImageUrl, vehicleTypeIcon } from '../utils/helpers';
 
 const VEHICLE_TYPES = ['PKW', 'LKW', 'Transporter', 'Motorrad', 'Sonstiges'];
+
+function RatingStars({ value }) {
+  const numericValue = Number(value || 0);
+
+  return (
+    <div className="flex items-center gap-0.5 text-amber-400">
+      {[1, 2, 3, 4, 5].map((starValue) => {
+        const active = numericValue >= starValue - 0.5;
+        return (
+          <Star
+            key={starValue}
+            className={`h-3.5 w-3.5 ${active ? 'fill-current' : ''}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 const emptyForm = {
   name: '',
@@ -197,6 +215,16 @@ export default function Vehicles() {
                   </div>
                   <p className="text-sm text-gray-500 font-mono">{v.license_plate}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{v.type}</p>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                    <RatingStars value={v.average_rating} />
+                    {Number(v.rating_count || 0) > 0 ? (
+                      <span>
+                        {Number(v.average_rating || 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}/5 aus {v.rating_count} Bewertung{Number(v.rating_count) === 1 ? '' : 'en'}
+                      </span>
+                    ) : (
+                      <span>Noch keine Bewertungen</span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500 mt-1">
                     {Number(v.price_per_km || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR/km
                     {v.flat_fee != null && Number(v.flat_fee) > 0

@@ -225,4 +225,125 @@ describe('API integration: auth, tenant roles, invitations', () => {
 
     expect(forbidden.body.error).toMatch(/Administratorrechte/i);
   });
+
+  it('requires a 5-star style rating when completing a trip and exposes vehicle averages', async () => {
+    const vehicleRes = await request(app)
+      .post('/api/vehicles')
+      .set('Authorization', `Bearer ${alphaAdminToken}`)
+      .send({
+        name: 'Rated Car',
+        license_plate: 'FAB-RATE-001',
+        type: 'PKW',
+        description: 'Rating test',
+      })
+      .expect(201);
+
+    const reservationRes = await request(app)
+      .post('/api/reservations')
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .send({
+        vehicle_id: vehicleRes.body.id,
+        date: '2031-01-10',
+        date_to: '2031-01-10',
+        time_from: '08:00',
+        time_to: '09:00',
+        reason: 'Rating flow',
+      })
+      .expect(201);
+
+    await request(app)
+      .patch(`/api/reservations/${reservationRes.body.id}/complete`)
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .send({
+        km_driven: 12,
+        destination: 'Musterziel',
+      })
+      .expect(400);
+
+    const completedRes = await request(app)
+      .patch(`/api/reservations/${reservationRes.body.id}/complete`)
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .send({
+        km_driven: 12,
+        destination: 'Musterziel',
+        vehicle_rating: 5,
+        vehicle_rating_comment: 'Sauberes Fahrzeug',
+      })
+      .expect(200);
+
+    expect(completedRes.body.status).toBe('completed');
+    expect(completedRes.body.vehicle_rating).toBe(5);
+    expect(completedRes.body.vehicle_rating_comment).toBe('Sauberes Fahrzeug');
+
+    const vehiclesRes = await request(app)
+      .get('/api/vehicles')
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .expect(200);
+
+    const ratedVehicle = vehiclesRes.body.find((vehicle) => vehicle.id === vehicleRes.body.id);
+    expect(ratedVehicle.average_rating).toBe(5);
+    expect(ratedVehicle.rating_count).toBe(1);
+
+    const adminReservationsRes = await request(app)
+      .get('/api/reservations')
+      .set('Authorization', `Bearer ${alphaAdminToken}`)
+      .expect(200);
+
+    const ratedReservation = adminReservationsRes.body.find((reservation) => reservation.id === reservationRes.body.id);
+    expect(ratedReservation.vehicle_rating_comment).toBe('Sauberes Fahrzeug');
+  });
+
+  it('backfills existing completed trips with 5 stars during migration', async () => {
+    const legacyVehicleRes = await request(app)
+      .post('/api/vehicles')
+      .set('Authorization', `Bearer ${alphaAdminToken}`)
+      .send({
+        name: 'Legacy Rated Car',
+        license_plate: 'FAB-RATE-LEGACY',
+        type: 'PKW',
+        description: 'Legacy rating backfill test',
+      })
+      .expect(201);
+
+    const legacyReservationRes = await request(app)
+      .post('/api/reservations')
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .send({
+        vehicle_id: legacyVehicleRes.body.id,
+        date: '2031-01-11',
+        date_to: '2031-01-11',
+        time_from: '10:00',
+        time_to: '11:00',
+        reason: 'Legacy rating migration',
+      })
+      .expect(201);
+
+    await request(app)
+      .patch(`/api/reservations/${legacyReservationRes.body.id}/complete`)
+      .set('Authorization', `Bearer ${alphaUserToken}`)
+      .send({
+        km_driven: 8,
+        destination: 'Altbestand',
+        vehicle_rating: 4,
+      })
+      .expect(200);
+
+    const { db } = await import('../src/db/client.js');
+    await db.execute(
+      "UPDATE reservations SET vehicle_rating = NULL, vehicle_rating_comment = NULL, vehicle_rated_at = NULL WHERE id = ?",
+      [legacyReservationRes.body.id]
+    );
+
+    const { initDb } = await import('../src/db/client.js');
+    await initDb();
+
+    const migratedReservationsRes = await request(app)
+      .get('/api/reservations')
+      .set('Authorization', `Bearer ${alphaAdminToken}`)
+      .expect(200);
+
+    const migratedReservation = migratedReservationsRes.body.find((reservation) => reservation.id === legacyReservationRes.body.id);
+    expect(migratedReservation.vehicle_rating).toBe(5);
+    expect(migratedReservation.vehicle_rating_comment).toBeNull();
+  });
 });

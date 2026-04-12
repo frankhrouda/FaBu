@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, MapPin, Clock, CheckCircle2, XCircle, Car, Gauge, TriangleAlert } from 'lucide-react';
+import { Plus, MapPin, Clock, CheckCircle2, XCircle, Car, Gauge, Star, TriangleAlert } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import Modal from '../components/Modal';
+import TripCompletionModal, { emptyTripCompletionForm } from '../components/TripCompletionModal';
 import { useToast, ToastContainer } from '../components/Toast';
 import { statusBadge, statusLabel, formatDate, formatDateRange, formatKm, vehicleImageUrl } from '../utils/helpers';
 
@@ -20,7 +20,7 @@ export default function Reservations() {
   const [sortBy, setSortBy] = useState('trip_start');
   const [sortDirection, setSortDirection] = useState('asc');
   const [completeModal, setCompleteModal] = useState(null);
-  const [completeForm, setCompleteForm] = useState({ km_driven: '', destination: '' });
+  const [completeForm, setCompleteForm] = useState(emptyTripCompletionForm);
   const [saving, setSaving] = useState(false);
 
   const load = () =>
@@ -54,15 +54,21 @@ export default function Reservations() {
 
   const handleComplete = async (e) => {
     e.preventDefault();
+    if (!completeForm.vehicle_rating) {
+      show('Bitte gib eine Bewertung zwischen 1 und 5 Sternen ab.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await api.patch(`/reservations/${completeModal.id}/complete`, {
         km_driven: Number(completeForm.km_driven),
         destination: completeForm.destination,
+        vehicle_rating: Number(completeForm.vehicle_rating),
+        vehicle_rating_comment: completeForm.vehicle_rating_comment,
       });
       show('Fahrt erfolgreich abgeschlossen!');
       setCompleteModal(null);
-      setCompleteForm({ km_driven: '', destination: '' });
+      setCompleteForm(emptyTripCompletionForm);
       load();
     } catch (err) {
       show(err.message, 'error');
@@ -167,70 +173,21 @@ export default function Reservations() {
               key={r.id}
               reservation={r}
               showUser={isAdmin}
-              onComplete={() => { setCompleteForm({ km_driven: '', destination: '' }); setCompleteModal(r); }}
+              onComplete={() => { setCompleteForm(emptyTripCompletionForm); setCompleteModal(r); }}
               onCancel={() => handleCancel(r)}
             />
           ))}
         </div>
       )}
 
-      {/* Complete trip modal */}
-      {completeModal && (
-        <Modal title="Fahrt abschließen" onClose={() => setCompleteModal(null)}>
-          <div className="mb-4 p-3 bg-indigo-50 rounded-xl text-sm text-indigo-700">
-            <p className="font-semibold">{completeModal.vehicle_name}</p>
-            <p className="text-indigo-500">
-              {completeModal.date_to && completeModal.date_to !== completeModal.date
-                ? `${formatDate(completeModal.date)} – ${formatDate(completeModal.date_to)}`
-                : formatDate(completeModal.date)}
-              {' · '}{completeModal.time_from} – {completeModal.time_to}
-            </p>
-          </div>
-          <form onSubmit={handleComplete} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Gefahrene Kilometer <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="number"
-                  min="1"
-                  value={completeForm.km_driven}
-                  onChange={(e) => setCompleteForm((f) => ({ ...f, km_driven: e.target.value }))}
-                  required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="z. B. 45"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Zielort / Reisezweck <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                <textarea
-                  value={completeForm.destination}
-                  onChange={(e) => setCompleteForm((f) => ({ ...f, destination: e.target.value }))}
-                  required
-                  rows={2}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                  placeholder="z. B. Kunde Mustermann, Musterstr. 1, München"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setCompleteModal(null)} className="flex-1 btn-secondary">
-                Abbrechen
-              </button>
-              <button type="submit" disabled={saving} className="flex-1 btn-primary">
-                {saving ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto block" /> : 'Abschließen'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <TripCompletionModal
+        reservation={completeModal}
+        form={completeForm}
+        setForm={setCompleteForm}
+        saving={saving}
+        onClose={() => setCompleteModal(null)}
+        onSubmit={handleComplete}
+      />
 
       {/* FAB */}
       <Link
@@ -303,6 +260,12 @@ function ReservationCard({ reservation: r, showUser, onComplete, onCancel }) {
                 <MapPin className="w-3.5 h-3.5 shrink-0 text-gray-400" />
                 <span className="truncate">{r.destination}</span>
               </div>
+              {r.vehicle_rating ? (
+                <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                  <Star className="w-3.5 h-3.5 shrink-0 fill-current" />
+                  <span>{r.vehicle_rating}/5 Sterne</span>
+                </div>
+              ) : null}
             </>
           )}
         </div>
