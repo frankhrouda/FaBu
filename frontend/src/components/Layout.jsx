@@ -41,22 +41,22 @@ export default function Layout() {
             <Car className="w-5 h-5" />
             <span className="font-bold text-lg tracking-tight">FaBu</span>
           </div>
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-1 min-w-0">
             {tenantName && (
-              <div className="text-xs text-indigo-200">
+              <div className="text-xs text-indigo-200 truncate max-w-full">
                 Mandant: <span className="font-semibold">{tenantName}</span>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-indigo-200 truncate max-w-[120px]">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm text-indigo-200 truncate">
                 {user?.name}
-                {isAdmin && (
-                  <span className="ml-1 text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">Admin</span>
-                )}
-              </div>
+              </span>
+              {isAdmin && (
+                <span className="shrink-0 text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">Admin</span>
+              )}
               <button
                 onClick={() => { logout(); navigate('/login'); }}
-                className="p-1 rounded-full bg-indigo-500 hover:bg-indigo-400 transition-colors"
+                className="shrink-0 p-1 rounded-full bg-indigo-500 hover:bg-indigo-400 transition-colors"
                 title="Abmelden"
               >
                 <LogOut className="w-4 h-4" />

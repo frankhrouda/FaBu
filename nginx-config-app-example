@@ -5,6 +5,11 @@ server {
     root /var/www/html/fabu;
     index index.html;
 
+    # Erlaubt Fahrzeugbild-Uploads bis 5 MB (Backend-Limit in vehicles.js);
+    # ohne das weist Nginx alles ueber 1 MB (Standard) mit 413 ab, bevor
+    # die Anfrage das Backend erreicht.
+    client_max_body_size 8m;
+
     # SPA Fallback (fuer React Router)
     location / {
         try_files $uri $uri/ /index.html;
