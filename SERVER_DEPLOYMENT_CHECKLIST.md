@@ -86,6 +86,35 @@ sudo systemctl restart pm2-deploy  # oder systemd-Service
 
 - [ ] Backend läuft auf Port 3001
 - [ ] PM2 Startup konfiguriert
+- [ ] **WICHTIG: Autostart nach Reboot konfigurieren** (siehe Punkt 6a)
+
+### 6a. Autostart nach Reboot sicherstellen ⚠️ **KRITISCH**
+```bash
+# Nach erfolgreichen Backend-Deployment:
+cd /home/deploy/FaBu
+
+# Option A: Automatisiertes Setup
+sudo chmod +x ensure-autostart.sh
+sudo ./ensure-autostart.sh
+
+# Option B: Manuell
+sudo systemctl enable postgresql
+sudo pm2 startup systemd -u deploy --hp /home/deploy
+pm2 save
+sudo systemctl enable nginx
+
+# Verifizierung
+chmod +x health-check.sh
+./health-check.sh
+```
+
+- [ ] PostgreSQL startet automatisch nach Reboot
+- [ ] PM2 Backend startet automatisch nach Reboot
+- [ ] Nginx startet automatisch nach Reboot
+- [ ] Health-Check erfolgreich
+- [ ] **Nach Reboot nochmal testen: health-check.sh**
+
+📖 Weitere Details: siehe [`PRODUCTION_AUTOSTART_GUIDE.md`](PRODUCTION_AUTOSTART_GUIDE.md)
 
 ## 7. Landing deployen (Server)
 ```bash

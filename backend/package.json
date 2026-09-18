@@ -28,6 +28,7 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.1",
     "nodemon": "^3.1.0",
     "supertest": "^7.2.2",
     "vitest": "^1.6.0"

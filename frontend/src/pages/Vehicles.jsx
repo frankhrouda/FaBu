@@ -113,8 +113,12 @@ export default function Vehicles() {
 
       const uploadVehicleId = modal === 'add' ? savedVehicle?.id : modal.id;
       if (imageFile && uploadVehicleId) {
-        await api.uploadVehicleImage(uploadVehicleId, imageFile);
-        show('Fahrzeugbild wurde hochgeladen');
+        try {
+          await api.uploadVehicleImage(uploadVehicleId, imageFile);
+          show('Fahrzeugbild wurde hochgeladen');
+        } catch (imgErr) {
+          show(imgErr.message, 'error');
+        }
       }
 
       setModal(null);

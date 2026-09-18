@@ -11,3 +11,4 @@ mobile/dist/
 *.local
 playwright-report/
 test-results/
+backend/coverage/

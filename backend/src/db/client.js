@@ -585,14 +585,39 @@ function ensureSqliteMigrations() {
 }
 
 export async function initDb() {
-  if (IS_POSTGRES) {
-    await getPool().query(PG_SCHEMA);
-    await ensurePgMigrations();
-    console.log('🐘 PostgreSQL verbunden und Schema bereit.');
-  } else {
-    getSqlite().exec(SQLITE_SCHEMA);
-    ensureSqliteMigrations();
-    console.log('🗄️  SQLite verbunden und Schema bereit.');
+  try {
+    if (IS_POSTGRES) {
+      // Teste Verbindung bevor Schema-Queries laufen
+      try {
+        const pool = getPool();
+        await pool.query('SELECT 1');
+        console.log('🐘 PostgreSQL verbunden.');
+      } catch (connError) {
+        const err = new Error('PostgreSQL Verbindung fehlgeschlagen');
+        err.code = '08006'; // PostgreSQL connection failure code
+        err.originalError = connError;
+        throw err;
+      }
+      
+      await getPool().query(PG_SCHEMA);
+      await ensurePgMigrations();
+      console.log('🐘 PostgreSQL Schema und Migrationen abgeschlossen.');
+    } else {
+      // SQLite ist immer lokal und sollte nicht fehlschlagen
+      try {
+        getSqlite().exec(SQLITE_SCHEMA);
+        ensureSqliteMigrations();
+        console.log('🗄️  SQLite verbunden und Schema bereit.');
+      } catch (sqliteErr) {
+        const err = new Error('SQLite Initialisierung fehlgeschlagen');
+        err.originalError = sqliteErr;
+        throw err;
+      }
+    }
+  } catch (error) {
+    console.error('❌ Datenbankinitialisierung fehlgeschlagen:', error.message);
+    // Rethrow damit der Server nicht startet mit fehler-hafter DB
+    throw error;
   }
 }
 

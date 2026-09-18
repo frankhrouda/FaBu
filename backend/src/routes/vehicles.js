@@ -134,8 +134,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     const id = row?.id ?? lastInsertId;
     const vehicle = await db.queryOne('SELECT * FROM vehicles WHERE id = ? AND tenant_id = ?', [id, req.tenantId]);
     res.status(201).json(vehicle);
-  } catch {
-    res.status(409).json({ error: 'Kennzeichen bereits vorhanden' });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return res.status(409).json({ error: 'Kennzeichen bereits vorhanden' });
+    }
+
+    console.error(err);
+    res.status(500).json({ error: 'Fehler beim Anlegen des Fahrzeugs' });
   }
 });
 

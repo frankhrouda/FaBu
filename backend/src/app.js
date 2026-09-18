@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDb } from './db/client.js';
+import { errorHandler, createErrorResponse, ERROR_CODES } from './utils/errorCodes.js';
 import authRoutes from './routes/auth.js';
 import adminTenantRoutes from './routes/adminTenants.js';
 import vehicleRoutes from './routes/vehicles.js';
@@ -104,10 +105,8 @@ export async function createApp() {
   app.use('/api/users', userRoutes);
   app.use('/api/waitlist', waitlistRoutes);
 
-  app.use((err, req, res, _next) => {
-    console.error(err);
-    res.status(500).json({ error: 'Interner Serverfehler' });
-  });
+  // Error Handler muss NACH allen anderen Routes kommen
+  app.use(errorHandler);
 
   return app;
 }
