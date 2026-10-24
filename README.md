@@ -4,7 +4,10 @@ Eine moderne Full-Stack-Anwendung fuer die Verwaltung von Fahrzeugreservierungen
 
 ## Status
 
-- Produktion aktiv auf PostgreSQL
+- **Seit 2026-10-24 auf dem Hetzner-Server `franksagent` (78.46.70.46)**, umgezogen
+  vom Hostinger-VPS. Betrieb als Docker-Compose-Projekt unter `/opt/fabu` hinter
+  Traefik. Hergang, Entscheidungen und Fallstricke: `MIGRATION_HOSTINGER_TO_HETZNER.md`
+- Produktion aktiv auf PostgreSQL (eigener Container, Volume `fabu_postgres_data`)
 - Web-App aktiv unter `https://app.fabu-online.de`
 - Landing-Page aktiv unter `https://fabu-online.de`
 - Multi-Tenant-Isolation ist implementiert und produktiv
@@ -70,32 +73,33 @@ adb devices
 
 Wenn ein Emulator laeuft, sollte dort z.B. `emulator-5554   device` erscheinen.
 
-### Produktions-Deployment (App)
+### Produktions-Deployment (App + Landing in einem Schritt)
 ```bash
-# Auf dem VPS (als deploy-User):
-ssh deploy@187.124.170.226
-cd /home/deploy/FaBu
-./deploy-prod.sh
+# Auf dem DEV-RECHNER, aus dem Repo-Root — nicht auf dem Server:
+./infra/scripts/deploy.sh
 
-# Testen: https://app.fabu-online.de
+# Testen: https://app.fabu-online.de und https://fabu-online.de
 ```
 
-### Landing-Page Deployment (separat)
-```bash
-# Auf dem VPS (als deploy-User):
-ssh deploy@187.124.170.226
-cd /home/deploy/FaBu
-./deploy-landing.sh
+Das Skript überträgt den aktuellen Commit per `git archive` über SSH nach
+`/opt/fabu`, baut dort die drei Images und startet die Container neu. Es gibt
+keinen Git-Checkout mehr auf dem Server, der aus dem Tritt kommen könnte.
 
-# Testen: https://fabu-online.de
+Landing und App werden zusammen ausgerollt — beide sind Targets desselben
+Dockerfiles. Ein separates `deploy-landing.sh` braucht es nicht mehr.
+
+**Stolperfalle beim Health-Check:** Er fragt `https://app.fabu-online.de` ab,
+also den öffentlichen Namen. Hält der Resolver des Dev-Rechners noch eine alte
+Adresse, meldet er 502, obwohl auf dem Server alles läuft. Im Zweifel
+gegenprüfen:
+```bash
+curl -s -o /dev/null -w '%{http_code} via %{remote_ip}\n' https://app.fabu-online.de/api/version
 ```
 
-Wichtig bei der Umstellung von SQLite auf PostgreSQL in Produktion:
-- `backend/.env` auf dem Server muss `DB_CLIENT=postgres` und eine gueltige `DATABASE_URL` enthalten.
-- `deploy-prod.sh` erstellt vor der ersten Umstellung automatisch ein SQLite-Backup unter `backend/data/sqlite-backups/`.
-- Danach wird dieses Backup idempotent in PostgreSQL eingespielt.
-- Nach erfolgreicher Erstmigration wird eine Marker-Datei gesetzt, damit Folge-Deploys nicht erneut migrieren.
-- Fuer eine erzwungene Wiederholung: `FORCE_SQLITE_MIGRATION=1 ./deploy-prod.sh`
+Hinweis zu SQLite: Produktion läuft auf PostgreSQL, der SQLite-Pfad existiert
+nur noch für die lokale Entwicklung. `better-sqlite3` bleibt trotzdem
+Abhängigkeit des Produktions-Images, weil `backend/src/db/client.js` es
+statisch auf Modulebene importiert — benutzt wird es dort nie.
 
 ## 📋 Workflow: Lokale Entwicklung → Produktion
 
@@ -109,26 +113,55 @@ Wichtig bei der Umstellung von SQLite auf PostgreSQL in Produktion:
 5. Commit & Push: `git add . && git commit -m "..." && git push`
 
 ### 2. Produktions-Deployment
-1. SSH auf VPS: `ssh deploy@187.124.170.226`
-2. PostgreSQL bereitstellen, falls noch nicht geschehen: `./setup-postgres.sh`
-3. In `backend/.env` setzen: `DB_CLIENT=postgres` und `DATABASE_URL=...`
-4. Deploy-Skript: `cd /home/deploy/FaBu && ./deploy-prod.sh`
-5. Testen: `https://app.fabu-online.de`
+1. Commit und Push
+2. `./infra/scripts/deploy.sh` vom Dev-Rechner
+3. Testen: `https://app.fabu-online.de`
 
 ### 3. Wartung
-- Backend neu starten: `pm2 restart fabu-backend`
-- Nginx reload: `sudo nginx -t && sudo systemctl reload nginx`
-- Logs prüfen:
-  - Nginx: `sudo tail -n 20 /var/log/nginx/error.log`
-  - Backend: `pm2 logs fabu-backend`
+
+Alle Befehle auf dem Server als User `frank` (nicht `root`), aus `/opt/fabu`.
+Abkürzung, die in den folgenden Zeilen benutzt wird:
+
+```bash
+COMPOSE="docker compose -f infra/docker-compose.prod.yml --env-file .env.production -p fabu"
+```
+
+- Status: `$COMPOSE ps`
+- Backend neu starten: `$COMPOSE restart api worker`
+- Logs: `docker logs fabu-api --tail 50`, ebenso `fabu-worker`, `fabu-web`, `fabu-landing`
+- Datenbank: `$COMPOSE exec postgres psql -U fabu -d fabu`
+- Kein nginx, kein Certbot, kein pm2 mehr auf dem Host — Traefik
+  (`/opt/traefik`) terminiert TLS und routet nach den Labels im Compose-File.
+- Zertifikat nach gescheitertem ACME neu anfordern:
+  `$COMPOSE up -d --force-recreate web` — ein `docker restart` genügt **nicht**,
+  Traefik fordert erst bei geänderter Service-Identität zeitnah neu an. Traefik
+  selbst nicht neu starten, das träfe alle Seiten des Servers.
+
+### 4. Backup und Wiederherstellung
+
+- Nächtlich um 05:00 per Cron (User `frank`): Datenbank, Fahrzeugbilder und
+  — sobald der GPG-Key vorliegt — die verschlüsselte `.env.production`, offsite
+  auf die Hetzner Storage Box.
+- Um 08:55 prüft ein Wächter **am Ziel** nach und mailt bei Problemen; montags
+  kommt eine „Backup OK"-Mail, damit ihr Ausbleiben selbst eine Warnung ist.
+- Wiederherstellung Schritt für Schritt: `infra/RESTORE.md`
 
 ## 🛠️ Skripte
 
 - `local-dev.sh`: Lokales Setup (Dependencies installieren)
-- `deploy-prod.sh`: Vollständiges Prod-Deployment (Pull, Build, Deploy, Restart)
-- `install-server.sh`: Server-Setup (Node.js, SQLite, Nginx, etc.)
-- `setup-postgres.sh`: PostgreSQL einrichten (lokal oder auf dem Server)
-- `update-app.sh`: Einfaches Update (veraltet, verwende `deploy-prod.sh`)
+- `infra/scripts/deploy.sh`: Prod-Deployment vom Dev-Rechner
+- `infra/scripts/backup.sh`: Nächtliches Offsite-Backup (läuft auf dem Server per Cron)
+- `infra/scripts/check-backup-freshness.sh`: Backup-Wächter (prüft am Ziel, mailt bei Problemen)
+- `infra/docker-compose.local-test.yml`: Produktions-Stack lokal probelaufen lassen,
+  inklusive eigenem Traefik — prüft die Routing-Labels, die ein reiner
+  `docker build` nicht berührt
+
+**Veraltet seit dem Umzug** (gelten für das alte Hostinger-Setup mit nginx,
+Certbot und pm2 und funktionieren hier nicht mehr): `deploy-prod.sh`,
+`deploy-landing.sh`, `install-server.sh`, `setup-postgres.sh`, `setup-user.sh`,
+`ensure-autostart.sh`, `health-check.sh`, `update-app.sh`,
+`nginx-config-*-example`, `NGINX_SETUP_DOCS.md`, `PRODUCTION_AUTOSTART_GUIDE.md`,
+`SERVER_DEPLOYMENT_CHECKLIST.md`.
 
 ### Neue Features
 - Logout-Button in der Kopfzeile (oben rechts). Direkt ausloggen und zur Login-Seite zurück.
@@ -147,11 +180,12 @@ Wichtig bei der Umstellung von SQLite auf PostgreSQL in Produktion:
 # Lokaler Build-Test
 cd frontend && npm run build && serve -s dist
 
-# Prod-Status prüfen
-ssh deploy@187.124.170.226 'pm2 status && sudo systemctl status nginx'
+# Prod-Status prüfen (inkl. der Gegenstelle, damit ein DNS-Cache nicht täuscht)
+curl -s -o /dev/null -w '%{http_code} via %{remote_ip}\n' https://app.fabu-online.de/api/version
+ssh hetzner-sportfoto 'su - frank -c "cd /opt/fabu && docker compose -f infra/docker-compose.prod.yml -p fabu ps"'
 
 # Prod-Logs prüfen
-ssh deploy@187.124.170.226 'pm2 logs fabu-backend --lines 10 && sudo tail -n 10 /var/log/nginx/error.log'
+ssh hetzner-sportfoto 'docker logs fabu-api --tail 20; docker logs fabu-worker --tail 10'
 ```
 
 ## 📁 Projektstruktur
@@ -179,10 +213,13 @@ FaBu/
 │   │   ├── api/
 │   │   └── navigation/
 │   └── package.json
-├── setup-user.sh     # Server-User-Setup
-├── install-server.sh # Server-Software-Installation
+├── infra/            # Deployment (seit dem Umzug auf Hetzner)
+│   ├── docker/       # Dockerfile (Targets api/web/landing) + nginx-Configs
+│   ├── docker-compose.prod.yml      # Produktion hinter Traefik
+│   ├── docker-compose.local-test.yml# Probelauf auf dem Dev-Rechner
+│   ├── scripts/      # deploy.sh, backup.sh, check-backup-freshness.sh
+│   └── RESTORE.md    # Wiederherstellung aus dem Offsite-Backup
 ├── local-dev.sh      # Lokales Setup
-├── deploy-prod.sh    # Prod-Deployment
 └── README.md         # Diese Datei
 ```
 

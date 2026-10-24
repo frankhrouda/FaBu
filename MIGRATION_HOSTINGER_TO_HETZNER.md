@@ -1,5 +1,10 @@
 # Umzug FaBu: Hostinger-VPS → Hetzner „franksagent"
 
+> **✅ Umgezogen am 2026-10-24, 16:02–16:09 Uhr. Downtime rund 7 Minuten.**
+> FaBu läuft unter `/opt/fabu` auf `franksagent`. Offen sind nur noch der
+> GPG-Key fürs Secret-Backup (D-10), der Registrar-Transfer (D-15) und die
+> VPS-Kündigung samt `lustiges-tabellenspiel.de` (§12). Protokoll: §20.
+
 Stand: 2026-10-24. Grundlage: Inspektion beider Server, der DNS-Zone und des Repos
 (keine Annahmen — alle Zahlen unten sind gemessen).
 
@@ -626,7 +631,7 @@ ist damit ebenfalls nur ein Record-Flip, kein Nameserver-Wechsel.
 
 ---
 
-## 9. Phase 4 — Cutover (ich, ~15 Minuten Fenster)
+## 9. Phase 4 — Cutover — ✅ DURCHGEFÜHRT 2026-10-24 (Protokoll: §20)
 
 Zeitpunkt nach deiner Wahl, sinnvoll abends. Die Reihenfolge ist so gewählt, dass die
 Datenbank **nie** gleichzeitig an zwei Stellen beschrieben wird.
@@ -656,7 +661,7 @@ Der Rollback bleibt so lange möglich, bis in Phase 5 bewusst abgeschaltet wird.
 
 ---
 
-## 10. Phase 5 — Betrieb absichern (ich)
+## 10. Phase 5 — Betrieb absichern — ✅ ERLEDIGT 2026-10-24
 
 Erst hier ist der Umzug „fertig" — eine laufende App ohne Backup ist kein erledigter Umzug.
 
@@ -1079,3 +1084,84 @@ profitiert davon später bei seinem eigenen Umzug mit.
 **Damit ist der Nameserver-Wechsel (D-6) freigegeben** — die Zone ist
 nachweislich vollständig, und der Wechsel bleibt das geplante Nicht-Ereignis,
 weil beide Zonen dieselben Ziele liefern.
+
+---
+
+## 20. Protokoll des Cutovers (2026-10-24)
+
+| Zeit | Schritt | Ergebnis |
+|---|---|---|
+| ~15:55 | Nameserver bei Hostinger auf `hydrogen`/`oxygen`/`helium` umgestellt | DENIC übernahm es in **Minuten**, nicht in 24 Stunden |
+| 15:58 | Kontrolle | Alle Namen lösen über Hetzner auf, zeigen aber noch auf den VPS — alle vier Seiten unverändert erreichbar. Das geplante Nicht-Ereignis |
+| 16:02:24 | `pm2 stop fabu-backend fabu-reminder-worker` | Beginn der Downtime. `omafun-web`/`omafun-worker` liefen weiter |
+| 16:02:42 | A-Records `@` und `app` auf `78.46.70.46` | `omafun` blieb auf `187.124.170.226` |
+| 16:03:02 | Final-Dump + Uploads vom VPS eingespielt | |
+| 16:03:30 | Row-Count-Abgleich über alle neun Tabellen | beidseitig `9/5/30/2/10/0/0/4/1`, Bilder 4 von 4 |
+| 16:03:39 | Stack gestartet | Alle fünf Container, Startreihenfolge griff |
+| ~16:05 | Let's-Encrypt-Zertifikate | `app.fabu-online.de` und `fabu-online.de` (SAN inkl. `www`), gültig bis 22.01.2027. **Erster Antrag erfolgreich** — die Entscheidung, den Stack bis nach dem DNS-Flip gestoppt zu lassen (§7), hat sich ausgezahlt |
+| 16:09 | Abnahmetest grün | siehe unten |
+| 16:10 | Cron eingetragen, Backup gelaufen, **Restore erprobt** | |
+
+**Abnahmetest:** API, SPA samt Router-Fallback (`/calendar`, `/admin/tenants`),
+alle vier Fahrzeugbilder mit korrektem Content-Type und voller Größe, Landing
+mit `/impressum/` und `/datenschutz/`, 404 für Unbekanntes, `www`,
+HTTP→HTTPS-Umleitung auf beiden Hosts, geschützter Endpunkt ohne Token → 401,
+Login mit erfundener Adresse → 401 (nicht 500, also DB-Pfad intakt).
+Traefik-Log: null ACME-Fehler für `fabu-online` nach dem Flip.
+
+**Backup:** Cron 05:00 / Wächter 08:55 in franks Crontab. Erster Lauf:
+DB 5.517 Bytes, Bilder 5.071.761 Bytes offsite. Der Wächter schlug korrekt an
+(fehlendes Secret-Backup) und mailte erfolgreich. **Restore aus dem
+Offsite-Dump in einen Wegwerf-Container ergab `9|5|30|2`** — geprüft, nicht
+angenommen.
+
+### Zwei Dinge liefen nicht glatt
+
+**1. Der erste Versuch, die A-Records zu ändern, scheiterte** mit
+`422 can't update records with this endpoint`. Ein `PUT` auf
+`/zones/{id}/rrsets/{name}/{type}` ändert TTL und Labels, aber nicht die
+Records. Richtig ist:
+
+```
+POST /v1/zones/{id}/rrsets/{name}/{type}/actions/set_records
+     {"records":[{"value":"78.46.70.46"}]}
+```
+
+Die Aktion läuft **asynchron** (`status: running`) — eine Kontrolle vier
+Sekunden später zeigte noch den alten Wert und sah nach einem zweiten
+Fehlschlag aus. Beim nächsten Mal: Aktion abwarten statt sofort prüfen.
+
+**2. Zweimal zeigte ein Test den falschen Zustand an**, beide Male durch DNS,
+nicht durch die Anwendung:
+
+- Direkt nach dem Flip meldete `app` hartnäckig **502**, während `landing`
+  grün war. Ursache: der Resolver des Dev-Rechners hielt die alte Adresse noch
+  **837 Sekunden** (die Hostinger-Zone hatte TTL 3600). Der Test traf also den
+  alten VPS, dessen Backend gerade gestoppt worden war. Öffentliche Resolver
+  hatten längst die neue Adresse, und ein Test per Host-Header gegen
+  `78.46.70.46` war durchgehend 200.
+- Auch das vermeintlich grüne `landing=200` kam vom alten Server, nicht vom neuen.
+
+Aufgefallen ist beides nur, weil `%{remote_ip}` mitprotokolliert wurde. Das ist
+dieselbe Klasse von Fehler wie in §17.5, und der Grund, warum `/api/version`
+als unterscheidender Marker so nützlich war (alt 1.09, neu 1.13 bzw. 1.18).
+
+**Konsequenz, auch für `deploy.sh`:** Sein Health-Check fragt den öffentlichen
+Namen ab und meldete nach dem Cutover ein falsches 502, obwohl der Deploy
+sauber durchlief. Im Zweifel immer gegenprüfen:
+
+```bash
+curl -s -o /dev/null -w '%{http_code} via %{remote_ip}\n' https://app.fabu-online.de/api/version
+```
+
+### Was jetzt noch offen ist
+
+| | Wer | Was |
+|---|---|---|
+| D-8 | **du** | Gegentest mit echtem Account: Login, Buchung, Passwort-Reset-Mail |
+| D-9 | **du** | 48 h Normalbetrieb beobachten, dann gilt der Umzug als bestätigt |
+| D-10 | **du** | GPG-Keypair fürs Secret-Backup (`infra/RESTORE.md`) — erledigt klarliste und meinekladde gleich mit |
+| D-14 | du | `lustiges-tabellenspiel.de` umziehen — letzter Blocker der VPS-Kündigung |
+| D-15 | du | Registrar-Transfer `fabu-online.de` zu Hetzner |
+| I-33 | ich | Abschluss-Archiv vor der Kündigung (inkl. omafun-Daten, §4) |
+| — | du | DNS-API-Token in der Hetzner Console wieder löschen |
