@@ -244,7 +244,7 @@ Umzügen noch als Vorlage dienen.
 
 ---
 
-## 4. Die `omafun`-Verzahnung (muss vor dem DNS-Schnitt geklärt sein)
+## 4. Die `omafun`-Verzahnung — ✅ geklärt: `omafun` wird aufgegeben
 
 `omafun.fabu-online.de` ist eine **Subdomain der Domain, die wir umziehen**. Sobald die
 Nameserver auf Hetzner zeigen, entscheidet die neue Zone über `omafun` mit.
@@ -260,7 +260,48 @@ Drei Wege:
    Risiko in einem Fenster. Als **eigenes Projekt danach**.
 3. `omafun` auf eine eigene Domain umstellen: nur sinnvoll, wenn du es sowieso vorhattest.
 
-Ich gehe im Plan von **Weg 1** aus.
+**Entschieden am 2026-10-24: `omafun` wird komplett aufgegeben.** Damit fällt
+die Frage weg, und zwar in die bequemste Richtung — es bleibt bei **Weg 1**,
+aber nicht als Zwischenlösung, sondern als Endzustand bis zur
+VPS-Kündigung:
+
+- Der `omafun`-A-Record in der Hetzner-Zone zeigt weiter auf `187.124.170.226`
+  und **bleibt stehen**. Ihn jetzt zu löschen hätte nur einen Effekt: die Seite
+  ginge in dem Moment dunkel, in dem die Delegation wechselt. Stehenlassen
+  kostet nichts, hält sie bis zum Schluss am Leben und lässt die Entscheidung
+  umkehrbar.
+- `omafun` geht zusammen mit dem VPS aus. Kein eigener Umzug, kein eigener
+  Schnitt, kein Zertifikatsproblem (das Certbot-Zertifikat auf dem VPS
+  erneuert sich über die unveränderte IP weiter).
+
+### Was dadurch einfacher wird
+
+**Von den zwei Blockern für die VPS-Kündigung bleibt einer.** `omafun` zählt
+nicht mehr, und `lustiges-tabellenspiel.de` hat seine DNS-Zone bereits bei
+Hetzner (§3a) — dessen Umzug ist also auch nur ein Record-Flip plus
+Containerisierung, kein Nameserver-Wechsel. Die Kündigung rückt damit von
+„zwei Projekte" auf „ein Projekt" heran.
+
+### Was dadurch unwiderruflich wird — bitte einmal lesen
+
+Ein gekündigter VPS wird **gelöscht, nicht archiviert**. Mit ihm verschwindet
+alles, was zu `omafun` gehört:
+
+| Was | Wo | Größe |
+|---|---|---|
+| SQLite-Datenbank (Prisma) | `/home/deploy/omafun/prisma/app.db` | 116 KB |
+| Fotos | `/home/deploy/omafun/data/photos` | Teil von 5,6 MB |
+| WhatsApp-Session | `/home/deploy/omafun/data/whatsapp-auth` | Teil von 5,6 MB |
+
+Das sind zusammen keine 6 MB. **Deshalb nimmt das Abschluss-Archiv (I-33) die
+omafun-Daten mit, solange nicht ausdrücklich etwas anderes gesagt wird** —
+bei dieser Größe ist Aufbewahren billiger als die Frage, ob man sie später
+doch gebraucht hätte. Löschen kann man danach immer noch.
+
+Zusätzlich: in `/home/deploy/omafun/.env` liegt ein **`ANTHROPIC_API_KEY`**.
+Der verschwindet mit dem Server, bleibt aber im Anthropic-Konto gültig. Wenn
+`omafun` wegfällt, gehört er dort widerrufen — sonst existiert ein Schlüssel
+weiter, den nichts mehr benutzt und niemand mehr im Blick hat.
 
 ---
 
@@ -664,9 +705,15 @@ und `wordpress-frank` (21.08.2026), beides schon erfolgreich von diesem VPS weg.
 
 ### Ich (I)
 
-- **I-33 · Letztes Archiv-Backup** des Alt-Systems (DB-Dump + Uploads + `.env`) offsite
-  nach `offsite:fabu/legacy-hostinger-<datum>/` legen. Unabhängig davon, dass die neue
-  Instanz sichert.
+- **I-33 · Letztes Archiv-Backup** des Alt-Systems offsite nach
+  `offsite:fabu/legacy-hostinger-<datum>/`. Unabhängig davon, dass die neue
+  Instanz sichert — ein gekündigter VPS wird gelöscht, nicht archiviert.
+  Hinein gehören:
+  - FaBu: DB-Dump, Uploads, `backend/.env`
+  - **`omafun`**: `prisma/app.db`, `data/photos`, `data/whatsapp-auth`,
+    `.env` (zusammen < 6 MB, siehe §4)
+  - die nginx-Configs **aller** Sites — `lustiges-tabellenspiel` braucht seine
+    noch als Vorlage für den eigenen Umzug
 - **I-34 · pm2 aufräumen**: `pm2 delete fabu-backend fabu-reminder-worker && pm2 save`
   (geht ohne sudo). `omafun-web`/`omafun-worker` bleiben.
 
@@ -700,15 +747,16 @@ komplett weg vom VPS — aber der VPS kann noch nicht gekündigt werden:
 
 | Blocker | Was fehlt | Aufwand (geschätzt) |
 |---|---|---|
-| `omafun` (pm2 ×2, Next.js, Port 3010, `omafun.fabu-online.de`) | eigener Umzug nach `franksagent` — gleiches Muster, eigenes Compose | ähnlich wie FaBu, aber ohne DNS-Umstellung (Zone liegt dann schon bei Hetzner) → deutlich einfacher |
-| `lustiges-tabellenspiel.de` (+ `www`) | eigener Umzug **und** eigene DNS-/Registrar-Entscheidung | eigenes Paket |
+| ~~`omafun`~~ | **Entfallen** — wird aufgegeben (§4), geht mit dem VPS aus. Daten kommen ins Abschluss-Archiv | keiner |
+| `lustiges-tabellenspiel.de` (+ `www`) | eigener Umzug. DNS-Zone liegt **schon** bei Hetzner (§3a), also nur Containerisierung plus Record-Flip | eigenes Paket, aber kein Nameserver-Wechsel |
 | Alte Docker-Volumes `wordpress-me_*` | liegen laut `SERVER.md` noch als Sicherheitsnetz auf dem VPS | nur wegwerfen |
+| Leere Alt-Datenbanken `fabu_db` (0 Tabellen) und `sportfoto` (seit Aug. 2026 umgezogen) | nichts — geprüft, keine Daten mehr nötig | keiner |
 
 Reihenfolge, die ich empfehle:
 
-1. **D-13** `omafun` umziehen (kann ich fast komplett übernehmen, sobald du grünes Licht
-   gibst — die Zone ist dann schon bei Hetzner, es ist nur ein Record-Flip)
-2. **D-14** `lustiges-tabellenspiel.de` umziehen oder abschalten
+1. ~~**D-13** `omafun` umziehen~~ — **entfallen**, wird aufgegeben (§4)
+2. **D-14** `lustiges-tabellenspiel.de` umziehen oder abschalten — der letzte
+   verbliebene Blocker
 3. **D-15 · Registrar-Transfer** `fabu-online.de` (Entscheidung E-1): AuthInfo-Code im
    hPanel ziehen (Domain vorher entsperren, Privacy-Schutz aus), beim Zielanbieter
    Transfer beauftragen, AuthInfo eintragen. Nameserver bleiben Hetzner → **kein**
@@ -790,7 +838,7 @@ Alles andere übernehme ich.
 **Du, später (je ein Stichwort von mir vorher):**
 - [ ] D-5 Freigabe DNS-Schnitt · D-6 Nameserver im hPanel (hydrogen/oxygen/helium, siehe D-6) · D-8 Gegentest
 - [ ] D-9 48 h beobachten · D-10 GPG-Keypair
-- [ ] D-13 `omafun` umziehen · D-14 `lustiges-tabellenspiel.de` · D-15 Registrar-Transfer
+- [ ] ~~D-13 `omafun`~~ (entfallen) · D-14 `lustiges-tabellenspiel.de` · D-15 Registrar-Transfer
       · D-17 VPS kündigen (**erst nach I-33**) · D-18 Hostinger-Konto schließen
 - [ ] D-11 / D-12 entfallen (VPS wird gelöscht)
 
