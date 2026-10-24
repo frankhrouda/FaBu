@@ -150,7 +150,7 @@ Die Begründungen zu den Optionen bleiben unten stehen, weil sie den Plan erklä
 
 | Option | Bedeutung | Bewertung |
 |---|---|---|
-| **A: DNS zu Hetzner, Registrierung bleibt bei Hostinger** | Nur Nameserver auf `ns1.your-server.de` etc. umstellen | Schnell, risikoarm, aber du bleibst Hostinger-Kunde → widerspricht „Hostinger komplett abgeben" |
+| **A: DNS zu Hetzner, Registrierung bleibt bei Hostinger** | Nur Nameserver auf die Hetzner-Zone umstellen | Schnell, risikoarm, aber du bleibst Hostinger-Kunde → widerspricht „Hostinger komplett abgeben" |
 | **B: Komplett zu Hetzner transferieren** (empfohlen) | AuthInfo-Code bei Hostinger ziehen, Domain über Hetzners Registration Robot / konsoleH übernehmen | Alles bei einem Anbieter, wie deine anderen Domains (`sportfoto-hrouda.de`, `meinekladde.de`, `franksagent.de` laufen schon über Hetzner-DNS). Dauer 1–2 Werktage, einmalige Registrierungskosten |
 | C: Zu einem Domain-Spezialisten (INWX, Netcup) | eigener Registrar | Mehr Komfort bei DNS/Handles, aber ein dritter Anbieter mehr |
 
@@ -399,57 +399,105 @@ Schnitt ist ein TTL-300-Record-Flip, den man in Sekunden zurückdrehen kann.
 
 ### Schritt 3a — Zone bei Hetzner anlegen, Ziele noch auf Hostinger
 
-Ich, mit dem Token aus D-3. Zone `fabu-online.de` in der Hetzner Console,
-TTL durchgehend **300**:
+**✅ Erledigt am 2026-10-24.** Zone-ID `1662373`, Zone-Default-TTL 300.
+Angelegt sind genau die Records der aktiven Hostinger-Zone, alle Ziele noch
+auf dem alten VPS:
 
-| Name | Typ | Wert | Zweck |
-|---|---|---|---|
-| `@` | A | `187.124.170.226` | **noch alt** — Landing |
-| `www` | CNAME | `fabu-online.de.` | Landing |
-| `app` | A | `187.124.170.226` | **noch alt** — App |
-| `omafun` | A | `187.124.170.226` | bleibt dauerhaft alt (§4) |
-| `send.mail` | MX, Prio 10 | `feedback-smtp.eu-west-1.amazonses.com.` | Resend Bounces |
-| `send.mail` | TXT | `v=spf1 include:amazonses.com ~all` | Resend SPF |
-| `resend._domainkey.mail` | TXT | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDNRz/ZXIE+rmSstFWrBBtNQG7dQCuqvGCJUMuvDiFcj8G0XGTUSJ7Z20Uo6MKBUTs29vWqX1gZzHUzPMKsTC6Wp1WCVz8ytr4io2LJDcm6wO6nKwLSSypLt6iZhcLa+4idRMkleppKhHqzWaPv+YnHCpXbV1lEUBe5WniN7nLexwIDAQAB` | Resend DKIM |
-| + alles aus **D-1** | | | was ich per `dig` nicht finden konnte |
+| Name | Typ | TTL | Wert | Zweck |
+|---|---|---|---|---|
+| `@` | A | 300 | `187.124.170.226` | **noch alt** — Landing |
+| `www` | CNAME | 300 | `fabu-online.de.` | Landing |
+| `app` | A | 300 | `187.124.170.226` | **noch alt** — App |
+| `omafun` | A | 300 | `187.124.170.226` | bleibt dauerhaft alt (§4) |
+| `send.mail` | MX 10 | 3600 | `feedback-smtp.eu-west-1.amazonses.com.` | Resend Bounces |
+| `send.mail` | TXT | 3600 | `v=spf1 include:amazonses.com ~all` | Resend SPF |
+| `resend._domainkey.mail` | TXT | 3600 | `p=MIGf…IDAQAB` (218 Zeichen) | Resend DKIM |
 
-⚠️ **AAAA-Falle — der wichtigste technische Punkt des ganzen Umzugs.** Hetzner liefert
-jede neue Zone mit einem **Default-AAAA-Record auf einen eigenen Parkhost** aus. Let's
-Encrypt validiert **bevorzugt über IPv6** → die Challenge landet auf einer fremden
-Maschine, und die Zertifikatsausstellung scheitert mit 404, obwohl der A-Record korrekt
-ist. Genau das hat bei `meinekladde.de` am 21.10.2026 **zwei** Anträge gekostet.
-Also: AAAA entweder **löschen** oder auf `2a01:4f8:120:3143::2` zeigen lassen. Für
-`@`/`www`/`app` zeige ich auf die Server-IPv6, für `omafun` muss AAAA **weg** (der VPS
-hat dort keine v6-Entsprechung in dieser Zone).
+TTL 300 auf allem, was beim Cutover umgelegt wird; 3600 auf den Mail-Records,
+die sich nie aendern.
+
+**Verifiziert**, indem die neuen Hetzner-Nameserver direkt abgefragt und Record
+fuer Record gegen die noch aktive Hostinger-Zone gestellt wurden
+(`dig @hydrogen.ns.hetzner.com` gegen `dig @ns1.dns-parking.com`): alle neun
+geprueften Namen identisch, der DKIM-Wert im Volltext identisch (218 Zeichen
+beidseitig). Die Delegation liegt weiter bei `ns1/ns2.dns-parking.com` — nach
+aussen hat sich also nichts geaendert.
+
+#### ⚠️ Korrektur: die Nameserver sind andere als gedacht
+
+Eine **neu** angelegte Zone bekommt in der Hetzner Console nicht den
+klassischen Satz, sondern die Cloud-DNS-Nameserver:
+
+```
+hydrogen.ns.hetzner.com
+oxygen.ns.hetzner.com
+helium.ns.hetzner.de
+```
+
+Meine fruehere Angabe (`ns1.your-server.de`, `ns3.second-ns.de`,
+`ns.second-ns.com`) war aus `meinekladde.de` abgeleitet, das diesen Satz
+tatsaechlich benutzt — aber das ist eine **migrierte** Alt-Zone, und fuer die
+gilt er weiter. Fuer eine neue Zone ist er falsch. Die API sagt es eindeutig:
+
+```
+meinekladde.de  (migriert)  ns1.your-server.de. ns.second-ns.com. ns3.second-ns.de.
+fabu-online.de  (neu)       hydrogen.ns.hetzner.com. oxygen.ns.hetzner.com. helium.ns.hetzner.de.
+```
+
+Das ist genau die Sorte Falle, die eine empirische Ableitung aus einer
+Nachbar-Zone nicht faengt. Fuer die kommenden Umzuege: **immer** die
+`authoritative_nameservers.assigned` der betroffenen Zone abfragen, nie von
+einer anderen uebernehmen.
+
+#### ✅ Entwarnung: die AAAA-Falle gilt hier nicht
+
+Die neue Zone kam **leer** — nur `NS` und `SOA`, kein Default-AAAA und auch
+keiner der Mail-Platzhalter, die die alte DNS-Konsole mitlieferte (Apex-MX auf
+`wwwNNN.your-server.de`, Apex-SPF `v=spf1 +a +mx ?all`, `autoconfig`-CNAME und
+vier SRV-Records — alles noch in `meinekladde.de` und
+`lustiges-tabellenspiel.de` zu sehen).
+
+Damit entfaellt das Risiko, das bei `meinekladde.de` am 21.10.2026 zwei
+Zertifikatsantraege gekostet hat. Es entfaellt aber nur, **weil geprueft
+wurde** — nicht als Regel. Bei der naechsten Zone wieder nachsehen.
+
+Nebenbefund: `lustiges-tabellenspiel.de` hat seine Zone **schon** bei Hetzner
+(ID 1468356), nur die A-Records zeigen noch auf den VPS. Dessen Umzug (D-14)
+ist damit ebenfalls nur ein Record-Flip, kein Nameserver-Wechsel.
 
 ### Schritt 3b — Nameserver bei Hostinger umstellen
 
 **Nur du** (Registrar-Zugang):
 
-- **D-6 · Nameserver auf Hetzner umstellen.** hPanel → Domains → `fabu-online.de` →
-  Nameserver → „Custom". Voraussichtlich:
+- **D-6 · Nameserver auf Hetzner umstellen.** hPanel → Domains →
+  `fabu-online.de` → Nameserver → „Custom". Diese drei, genau so, in dieser
+  Reihenfolge (aus `authoritative_nameservers.assigned` der Zone 1662373
+  abgelesen, nicht geraten):
   ```
-  ns1.your-server.de
-  ns3.second-ns.de
-  ns.second-ns.com
+  hydrogen.ns.hetzner.com
+  oxygen.ns.hetzner.com
+  helium.ns.hetzner.de
   ```
-  Das ist der Satz, den `meinekladde.de`, `sportfoto-hrouda.de` und `franksagent.de`
-  laut `dig` heute tatsächlich benutzen — und `meinekladde.de` ging erst am 21.10.2026
-  live, also **nach** der Console-Migration. Der Satz ist damit empirisch bestätigt.
-  Trotzdem: ich lese nach dem Anlegen der Zone die Nameserver-Liste aus der Console ab
-  (Zone → „Nameserver") und nenne dir die drei Namen in der **richtigen Reihenfolge**,
-  bevor du sie einträgst. Die Reihenfolge ist bei Hetzner relevant.
+  Achtung: **nicht** `ns1.your-server.de` — das ist der Satz der migrierten
+  Alt-Zonen und fuer diese neue Zone falsch (siehe Korrektur in Schritt 3a).
+  Das letzte endet auf **`.de`**, die ersten beiden auf `.com`.
 
-**Wirkung: keine.** Beide Zonen zeigen auf dieselben Ziele. Egal welchen Nameserver ein
-Resolver erwischt, FaBu läuft weiter auf Hostinger. Das nimmt dem DENIC-Delegationswechsel
-(bis zu 24 h) jede Dramatik.
+  **Wirkung: keine.** Beide Zonen liefern fuer jeden Namen dasselbe — ich habe
+  sie Record fuer Record verglichen. Egal welchen Nameserver ein Resolver
+  erwischt, FaBu laeuft weiter auf Hostinger. Das nimmt dem
+  DENIC-Delegationswechsel (bis zu 24 h) jede Dramatik.
+
+  **Vorher noch D-1 liefern.** Die Zone enthaelt alles, was ich per `dig`
+  finden konnte — aber einen Record-Namen, den niemand kennt, kann man nicht
+  abfragen, und AXFR ist bei Hostinger gesperrt. Steht im hPanel noch ein
+  Eintrag, den ich nicht erraten habe, faellt er mit diesem Schritt weg.
 
 - **D-7 · Alte Hostinger-Zone noch nicht löschen** — erst nach Phase 5. Sie ist das
   Rollback.
 
 ### Schritt 3c — Verifikation (ich)
 
-- **I-19**: `dig @ns1.your-server.de fabu-online.de` und Vergleich aller Records gegen
+- **I-19**: `dig @hydrogen.ns.hetzner.com fabu-online.de` und Vergleich aller Records gegen
   §6-Tabelle; Delegation prüfen (`dig +trace NS fabu-online.de`); bestätigen, dass
   `omafun`, Mail-Records und Landing unverändert antworten.
 
@@ -610,7 +658,8 @@ Reihenfolge, die ich empfehle:
 
 | Risiko | Gegenmaßnahme |
 |---|---|
-| **Default-AAAA von Hetzner bricht die Zertifikatsausstellung** (bei `meinekladde` passiert) | Schritt 3a: AAAA löschen bzw. auf `2a01:4f8:120:3143::2` setzen, **bevor** der A-Record flippt |
+| ~~Default-AAAA von Hetzner bricht die Zertifikatsausstellung~~ | **Entfallen**: die neue Zone kam leer, kein AAAA (Schritt 3a). Geprueft, nicht angenommen |
+| **Falscher Nameserver-Satz bei D-6** | Die drei Namen stammen aus `authoritative_nameservers.assigned` der Zone selbst, nicht aus einer Nachbar-Zone — dort waeren sie falsch gewesen |
 | **Compose ohne `name:` greift fremde Container** (bei `selbstanker` passiert) | `name: fabu` gesetzt, zusätzlich immer `-p fabu` übergeben |
 | **Traefik fordert nach gescheitertem ACME nicht neu an** | `up -d --force-recreate <service>` statt `docker restart`; Traefik selbst nicht neustarten (träfe alle Seiten) |
 | **`systemd-resolved` cacht alte IPs** | `resolvectl flush-caches` auf beiden Servern (I-25) |
@@ -649,11 +698,12 @@ Alles andere übernehme ich.
 
 **Du, jetzt:**
 - [x] D-2 Entscheidungen E-1 / E-2 / E-3 getroffen (2026-10-24, siehe §3)
-- [ ] **D-3 · API-Token** in der Hetzner Console erzeugen → **Anleitung §3a**
-- [ ] **D-1 · Zonen-Export** `fabu-online.de` aus dem hPanel hierher pasten
+- [x] D-3 · API-Token geliefert (2026-10-24), Zone 1662373 angelegt und verifiziert
+- [ ] **D-1 · Zonen-Export** `fabu-online.de` aus dem hPanel hierher pasten — das
+      Einzige, was jetzt noch vor D-6 fehlt
 
 **Du, später (je ein Stichwort von mir vorher):**
-- [ ] D-5 Freigabe DNS-Schnitt · D-6 Nameserver im hPanel (Liste nenne ich dir) · D-8 Gegentest
+- [ ] D-5 Freigabe DNS-Schnitt · D-6 Nameserver im hPanel (hydrogen/oxygen/helium, siehe D-6) · D-8 Gegentest
 - [ ] D-9 48 h beobachten · D-10 GPG-Keypair
 - [ ] D-13 `omafun` umziehen · D-14 `lustiges-tabellenspiel.de` · D-15 Registrar-Transfer
       · D-17 VPS kündigen (**erst nach I-33**) · D-18 Hostinger-Konto schließen
