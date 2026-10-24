@@ -268,11 +268,18 @@ Ich gehe im Plan von **Weg 1** aus.
 
 ### Du (D)
 
-- **D-1 · Zonen-Export aus Hostinger.** hPanel → Domains → `fabu-online.de` → DNS-Zone.
-  Screenshot oder CSV-Export der **vollständigen** Record-Liste, und mir hier reinpasten.
-  → Grund: AXFR ist gesperrt, ich kann unbekannte Record-Namen nicht erraten. Wenn hier
-  z. B. noch ein alter Mail- oder Verifikations-Record steht, fällt er beim Umzug sonst
-  lautlos weg.
+- **D-1 · Zonen-Export aus Hostinger** — *vom Blocker zur Bestätigung herabgestuft,
+  siehe §19.* Klickpfad: `hpanel.hostinger.com` → **Domains** → `fabu-online.de` →
+  **Verwalten** → linkes Menü **DNS / Nameserver** → Tabelle **DNS-Einträge
+  verwalten**. Einen verlässlichen Export-Button gibt es dort nicht; ein Screenshot
+  oder die kopierte Tabelle genügt.
+  → Grund: AXFR ist bei Hostinger gesperrt, und einen Record-Namen, den man nicht
+  kennt, kann man nicht abfragen. Steht dort noch ein alter Mail- oder
+  Verifikations-Record, fiele er beim Nameserver-Wechsel lautlos weg.
+  → Nach dem Scan in §19 ist das Restrisiko klein. Stimmt die Tabelle mit den
+  sieben bekannten Records überein, reicht ein „stimmt".
+  **Dieselbe Seite wird noch zweimal gebraucht:** für D-6 (Nameserver) und D-15
+  (AuthInfo-Code).
 - **D-2 · Entscheidungen E-1, E-2, E-3** (§3) beantworten.
 - **D-3 · DNS-API-Token** in der Hetzner Console erstellen und mir geben —
   Schritt-für-Schritt in **§3a**. (Nicht `dns.hetzner.com`, das ist abgeschaltet.)
@@ -939,3 +946,40 @@ curl -sk --noproxy '*' -H 'Host: fabu-online.de'     https://78.46.70.46/impress
 Das `-k` ist dabei erwartet und richtig: vor der DNS-Umstellung kann es kein
 gueltiges Zertifikat geben, Traefik liefert sein Self-Signed aus und routet
 trotzdem korrekt nach Host-Header.
+
+---
+
+## 19. Vollständigkeitsprüfung der Zone ohne AXFR (2026-10-24)
+
+Weil Hostinger den Zonentransfer sperrt und `dig` nur Namen beantworten kann, die
+man schon kennt, blieb nach dem Nachbau der Zone eine offene Frage: *gibt es in
+der Hostinger-Zone einen Record, auf dessen Namen ich nicht gekommen bin?*
+
+Statt die Antwort allein von D-1 abhängig zu machen, wurde die aktive
+Hostinger-Zone autoritativ (`dig @ns1.dns-parking.com`) gegen rund 200
+Kandidatennamen geprüft: alle üblichen Subdomains (www, app, api, mail, smtp,
+imap, webmail, cpanel, webdisk, ftp, vpn, admin, blog, shop, status, cdn, git,
+staging, …), die deutschen naheliegenden (kalender, buchung, fuhrpark, flotte,
+…), die Mail- und Authentifizierungsmuster (`_dmarc`, `_domainkey` mit den
+gängigen Selektoren inkl. Hostingers eigenen, `_mta-sts`, `_smtp._tls`,
+`_acme-challenge`) und die SRV-Muster der Mail-Autokonfiguration. Dazu ein
+zweiter Durchgang für Namen **zwei Ebenen tief** (`*.mail`, `*.send`, `*.app`) —
+die erste Runde hätte `send.mail` sonst nicht gesehen, ein blinder Fleck, der
+beinahe durchgegangen wäre.
+
+**Ergebnis: kein einziger unbekannter Record.** Gefunden wurden genau die
+sieben bereits angelegten, plus die von Hostinger verwalteten NS und SOA. Kein
+Apex-MX, kein Apex-TXT, kein CAA, kein AAAA.
+
+Abschließender Soll-Ist-Vergleich, Hostinger gegen die Hetzner-Kopie, über
+`@ A/MX/TXT/CAA`, `www CNAME`, `app A`, `omafun A`, `send.mail MX/TXT` und
+`resend._domainkey.mail TXT`: **zehn von zehn identisch.**
+
+**Was das für D-1 bedeutet:** Der Export ist von einem Blocker zu einer
+Bestätigung geworden. Ein Namensscan kann grundsätzlich nur finden, wonach er
+sucht — ein Record mit einem völlig unerwarteten Namen bliebe unsichtbar. Das
+ist aber kein Grund mehr, den Umzug aufzuhalten: liegt die Zone bei Hetzner,
+kann ein nachträglich entdeckter Record in Minuten nachgetragen werden, weil
+die Zone dann unter eigener Kontrolle steht. Vorher war genau das der Punkt —
+bei Hostinger hätte man ihn nicht mehr nachlesen können, sobald die
+Delegation weg ist.
