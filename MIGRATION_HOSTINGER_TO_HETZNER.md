@@ -268,8 +268,8 @@ Ich gehe im Plan von **Weg 1** aus.
 
 ### Du (D)
 
-- **D-1 · Zonen-Export aus Hostinger** — *vom Blocker zur Bestätigung herabgestuft,
-  siehe §19.* Klickpfad: `hpanel.hostinger.com` → **Domains** → `fabu-online.de` →
+- **D-1 · Zonen-Export aus Hostinger** — ✅ **erledigt 2026-10-24, Abgleich in §19.**
+  Klickpfad (wird noch zweimal gebraucht): `hpanel.hostinger.com` → **Domains** → `fabu-online.de` →
   **Verwalten** → linkes Menü **DNS / Nameserver** → Tabelle **DNS-Einträge
   verwalten**. Einen verlässlichen Export-Button gibt es dort nicht; ein Screenshot
   oder die kopierte Tabelle genügt.
@@ -782,8 +782,10 @@ Alles andere übernehme ich.
 **Du, jetzt:**
 - [x] D-2 Entscheidungen E-1 / E-2 / E-3 getroffen (2026-10-24, siehe §3)
 - [x] D-3 · API-Token geliefert (2026-10-24), Zone 1662373 angelegt und verifiziert
-- [ ] **D-1 · Zonen-Export** `fabu-online.de` aus dem hPanel hierher pasten — das
-      Einzige, was jetzt noch vor D-6 fehlt
+- [x] D-1 · Zonen-Export geliefert und abgeglichen (2026-10-24, §19) — 7 von 7
+      Records identisch, D-6 ist damit freigegeben
+- [ ] **Entscheidung §17.4 · Reminder-Worker** — der letzte offene Punkt vor dem
+      Cutover
 
 **Du, später (je ein Stichwort von mir vorher):**
 - [ ] D-5 Freigabe DNS-Schnitt · D-6 Nameserver im hPanel (hydrogen/oxygen/helium, siehe D-6) · D-8 Gegentest
@@ -975,11 +977,37 @@ Abschließender Soll-Ist-Vergleich, Hostinger gegen die Hetzner-Kopie, über
 `@ A/MX/TXT/CAA`, `www CNAME`, `app A`, `omafun A`, `send.mail MX/TXT` und
 `resend._domainkey.mail TXT`: **zehn von zehn identisch.**
 
-**Was das für D-1 bedeutet:** Der Export ist von einem Blocker zu einer
-Bestätigung geworden. Ein Namensscan kann grundsätzlich nur finden, wonach er
-sucht — ein Record mit einem völlig unerwarteten Namen bliebe unsichtbar. Das
-ist aber kein Grund mehr, den Umzug aufzuhalten: liegt die Zone bei Hetzner,
-kann ein nachträglich entdeckter Record in Minuten nachgetragen werden, weil
-die Zone dann unter eigener Kontrolle steht. Vorher war genau das der Punkt —
-bei Hostinger hätte man ihn nicht mehr nachlesen können, sobald die
-Delegation weg ist.
+Ein Namensscan kann grundsätzlich nur finden, wonach er sucht — ein Record mit
+einem völlig unerwarteten Namen wäre unsichtbar geblieben. Deshalb wurde der
+Export trotzdem eingeholt.
+
+### D-1 erledigt: der Export bestätigt den Scan
+
+Der Zonen-Export aus dem hPanel (2026-10-24) wurde maschinell gegen die
+Hetzner-Zone verglichen, nicht nach Augenmaß. Zielnamen wurden dabei um den
+abschließenden Punkt normalisiert, weil Hostingers Export ihn teils wegläßt
+(`feedback-smtp.eu-west-1.amazonses.com` ohne Punkt) — reine Formatierung, die
+live korrekt absolut aufgelöst wird; `SOA` und `NS` bleiben außen vor, die
+verwaltet jeder Anbieter selbst.
+
+```
+NAME                     TYP    HOSTINGER    HETZNER
+@                        A      ok           ok      identisch  TTL 3600 -> 300
+app                      A      ok           ok      identisch  TTL 3600 -> 300
+omafun                   A      ok           ok      identisch  TTL 14400 -> 300
+www                      CNAME  ok           ok      identisch
+send.mail                MX     ok           ok      identisch
+send.mail                TXT    ok           ok      identisch
+resend._domainkey.mail   TXT    ok           ok      identisch
+
+Records im Export: 7      Records bei Hetzner: 7
+Kein fehlender, kein überzähliger, kein abweichender Record.
+```
+
+Die drei TTL-Unterschiede sind beabsichtigt: 300 statt 3600/14400, damit der
+Record-Flip beim Cutover in Minuten statt Stunden durchschlägt. `omafun`
+profitiert davon später bei seinem eigenen Umzug mit.
+
+**Damit ist der Nameserver-Wechsel (D-6) freigegeben** — die Zone ist
+nachweislich vollständig, und der Wechsel bleibt das geplante Nicht-Ereignis,
+weil beide Zonen dieselben Ziele liefern.
