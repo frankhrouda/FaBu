@@ -865,7 +865,7 @@ bei jedem Durchgang einen Zeitstempel, der Healthcheck prueft dessen Alter)
 wäre eine saubere Nachbesserung, braucht aber eine Code-Aenderung — als
 Folgeaufgabe notiert, nicht Teil des Umzugs.
 
-### 17.4 **Entscheidung nötig: Der Reminder-Worker ist schon heute kaputt**
+### 17.4 Der Reminder-Worker ist schon heute kaputt — ⏸️ **bewusst zurückgestellt**
 
 Der Probelauf hat einen Fehler reproduziert, der **nicht** vom Umzug kommt:
 
@@ -923,6 +923,26 @@ Drei Wege:
 | **A** | Fix **vor** dem Umzug, und vorher die abgelaufenen Reminder auf `sent` setzen (`UPDATE reservations SET reminder_status='sent' WHERE reminder_status='pending' AND reminder_at_utc < NOW()`) | Empfohlen. Keine Mail-Flut, Feature funktioniert ab dem Umzug, und der Umzug wird an einer bereits reparierten Anwendung geprueft |
 | **B** | Fix **nach** dem Umzug als eigener kleiner Change | Trennt die Baustellen sauber, aber der Abnahmetest des Umzugs kann die Erinnerungen dann nicht mitpruefen |
 | **C** | Erst mal nichts | Der Umzug aendert daran nichts — es bleibt kaputt wie heute. Dann aber bitte bewusst, nicht aus Versehen |
+
+**Entschieden am 2026-10-24: Weg C.** Der Fehler wird im Rahmen des Umzugs
+**nicht** angefasst. Das ist eine bewusste Entscheidung, kein Versehen — und
+sie aendert am Umzug nichts, weil der Fehler schon vorher da war und der
+Container ihn eins zu eins mitnimmt.
+
+Was dabei im Blick bleiben muss:
+
+- **Der Zustand ist still.** Der Fehler landet im `catch`, der Worker laeuft
+  weiter, der Container gilt als gesund. Ohne diesen Eintrag hier wuerde beim
+  naechsten Blick in die Logs jemand von vorn anfangen zu suchen.
+- **Die Altlast waechst.** Jede Reservierung mit `reminder_status = 'pending'`
+  bleibt liegen. Wird der Fix irgendwann eingebaut, verschickt der erste
+  Durchgang *alle* diese Erinnerungen auf einmal — je spaeter der Fix, desto
+  groesser die Mail-Flut. Das `UPDATE ... SET reminder_status='sent' WHERE
+  reminder_at_utc < NOW()` aus Weg A gehoert dann zwingend davor.
+- **Der Abnahmetest des Umzugs kann die Erinnerungen nicht pruefen.** Die
+  Passwort-Reset-Mail dagegen schon: die laeuft ueber
+  `backend/src/mail/mailer.js` und ist von diesem Fehler nicht betroffen. Der
+  Mailversand als solcher wird also trotzdem verifiziert.
 
 Unabhaengig davon steht im Konzept weiter unten die Abnahme der
 **Passwort-Reset-Mail** (I-26): die laeuft über einen anderen Pfad
