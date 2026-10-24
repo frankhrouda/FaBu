@@ -1,0 +1,162 @@
+# Produktions-Deployment von FaBu auf dem Hetzner-Server "franksagent".
+# Folgt dem Muster der anderen Apps dort (/opt/traefik, SERVER.md im Repo
+# HetznerServer): Traefik terminiert TLS und routet nach Host()/PathPrefix()
+# aus den Labels, kein nginx auf dem Host, jede App bringt ihren eigenen
+# Postgres-Container mit.
+#
+# Nutzung auf dem Server (aus /opt/fabu):
+#   docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# Vom Dev-Rechner bequemer: ./infra/scripts/deploy.sh
+#
+# .env.production liegt ausschliesslich auf dem Server (chmod 600), nie im Git.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# WICHTIG, nicht wegkuerzen: das explizite `name:`. Ohne das leitet Compose
+# den Projektnamen aus dem Verzeichnis ab, in dem diese Datei liegt — "infra" —
+# und das kollidiert mit *jeder* anderen App auf diesem Server, deren
+# Compose-Datei ebenfalls unter infra/ liegt. Bei selbstanker hat genau das
+# einmal den laufenden Postgres von sportfoto-hrouda neu erzeugt (gleiches
+# Volume, kein Datenverlust, aber auch kein Vorsatz). Zusaetzlich ist es nie
+# falsch, `-p fabu` explizit mitzugeben.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Routing-Aufteilung auf app.fabu-online.de:
+#   /api/*, /uploads/*  -> api  (Prio 10)
+#   alles andere        -> web  (Prio 1)
+# Das ist kein Schoenheitsentscheid: das Frontend ruft relative Pfade auf
+# (frontend/vite.config.js), also bleibt alles same-origin und es braucht
+# weder CORS noch eine Build-Zeit-API-URL. Gleiches Muster wie selbstanker.
+
+name: fabu
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fabu-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fabu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: fabu
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fabu -d fabu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  api:
+    build:
+      context: ../
+      dockerfile: infra/docker/Dockerfile
+      target: api
+    image: fabu-api:latest
+    container_name: fabu-api
+    restart: unless-stopped
+    env_file: ../.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Fahrzeugbilder. Eigenes Volume, damit ein Image-Neubau sie nicht
+      # mitnimmt — im alten Setup lagen sie im Repo-Verzeichnis.
+      - uploads_data:/repo/backend/data/uploads
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fabu-api.rule=Host(`app.fabu-online.de`) && (PathPrefix(`/api`) || PathPrefix(`/uploads`))"
+      - "traefik.http.routers.fabu-api.entrypoints=websecure"
+      - "traefik.http.routers.fabu-api.tls=true"
+      - "traefik.http.routers.fabu-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.fabu-api.priority=10"
+      - "traefik.http.services.fabu-api.loadbalancer.server.port=3001"
+
+  worker:
+    # Gleiches Image wie api, anderer Prozess — entspricht dem bisherigen
+    # pm2-Paar fabu-backend / fabu-reminder-worker. `image:` ohne `build:`
+    # greift das von api gebaute Image; deshalb muss api im selben
+    # compose-Lauf gebaut werden (tut `up -d --build`).
+    image: fabu-api:latest
+    container_name: fabu-worker
+    restart: unless-stopped
+    env_file: ../.env.production
+    # Wartet auf *api*, nicht nur auf postgres. Das Schema wird von
+    # initDb() beim Start des Backends angelegt (backend/src/db/client.js) —
+    # der Worker selbst legt nichts an. Startet er parallel, pollt er in eine
+    # leere Datenbank und loggt 'relation "reservations" does not exist'. Er
+    # erholt sich beim naechsten Durchgang nach einer Minute von selbst, aber
+    # ein Fehler im Log, der keiner ist, kostet bei der naechsten
+    # Stoerungssuche Zeit. Im lokalen Probelauf am 24.10.2026 reproduziert.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: ["node", "src/workers/reminder-worker.js"]
+    # Der Healthcheck aus dem Dockerfile prueft http://127.0.0.1:3001 — das
+    # ist die API. Der Worker lauscht auf keinem Port und wuerde deshalb
+    # dauerhaft als "unhealthy" dastehen. Ein Container, der immer unhealthy
+    # ist, ist schlimmer als keiner: er macht die Spalte in `docker ps`
+    # wertlos und verdeckt den Tag, an dem es wirklich etwas heisst.
+    #
+    # Was den Worker stattdessen ueberwacht: stirbt der Prozess, endet der
+    # Container und `restart: unless-stopped` startet ihn neu. Fachliche
+    # Fehler stehen in `docker logs fabu-worker` (dort ist derzeit auch der
+    # datetime()-Bug aus der SQLite-Zeit zu sehen, siehe
+    # MIGRATION_HOSTINGER_TO_HETZNER.md §17).
+    healthcheck:
+      disable: true
+    networks:
+      - internal
+
+  web:
+    build:
+      context: ../
+      dockerfile: infra/docker/Dockerfile
+      target: web
+    image: fabu-web:latest
+    container_name: fabu-web
+    restart: unless-stopped
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fabu-web.rule=Host(`app.fabu-online.de`)"
+      - "traefik.http.routers.fabu-web.entrypoints=websecure"
+      - "traefik.http.routers.fabu-web.tls=true"
+      - "traefik.http.routers.fabu-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.fabu-web.priority=1"
+      - "traefik.http.services.fabu-web.loadbalancer.server.port=80"
+
+  landing:
+    build:
+      context: ../
+      dockerfile: infra/docker/Dockerfile
+      target: landing
+    image: fabu-landing:latest
+    container_name: fabu-landing
+    restart: unless-stopped
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fabu-landing.rule=Host(`fabu-online.de`) || Host(`www.fabu-online.de`)"
+      - "traefik.http.routers.fabu-landing.entrypoints=websecure"
+      - "traefik.http.routers.fabu-landing.tls=true"
+      - "traefik.http.routers.fabu-landing.tls.certresolver=letsencrypt"
+      - "traefik.http.services.fabu-landing.loadbalancer.server.port=80"
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  internal:
+  web:
+    external: true

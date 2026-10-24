@@ -1,0 +1,40 @@
+# Alles, was nicht in den Build-Kontext gehoert.
+#
+# Die node_modules-Eintraege sind nicht nur eine Frage der Groesse: ein lokal
+# gebautes natives Modul (better-sqlite3, glibc) wuerde ins Alpine-Image
+# kopiert und dort beim Laden abstuerzen.
+.git
+.github
+.githooks
+**/node_modules
+mobile
+e2e
+playwright-report
+test-results
+backend/coverage
+frontend/dist
+landing/dist
+
+# Laufzeitdaten des alten Setups: SQLite-Datei, SQLite-Backups und Uploads.
+# Die Uploads kommen produktiv aus einem Docker-Volume, nicht aus dem Image.
+backend/data
+
+# Secrets gehoeren nie in ein Image. Die Muster brauchen **/, weil ein
+# blankes `.env` in Docker nur die Datei im Kontext-Wurzelverzeichnis trifft —
+# die echte Datei liegt aber unter backend/.env.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.production.example
+
+# Dokumentation und die Altlast-Skripte des Hostinger-Setups.
+*.md
+deploy-prod.sh
+deploy-landing.sh
+install-server.sh
+setup-postgres.sh
+setup-user.sh
+ensure-autostart.sh
+health-check.sh
+update-app.sh
+nginx-config-*

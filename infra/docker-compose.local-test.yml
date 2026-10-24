@@ -1,0 +1,73 @@
+# Lokaler Probelauf des *Produktions*-Stacks auf dem Dev-Rechner.
+#
+#   docker network create web                     # einmalig
+#   docker compose -f infra/docker-compose.prod.yml \
+#                  -f infra/docker-compose.local-test.yml \
+#                  --env-file .env.production -p fabu-local up -d --build
+#
+# Zweck: pruefen, was ein reiner `docker build` nicht pruefen kann — die
+# Traefik-Labels. Host-Regeln, die PathPrefix-Aufteilung und besonders die
+# Prioritaeten (api 10 vor web 1) sind die fehleranfaelligste Stelle des
+# ganzen Deployments, und ein Vertipper darin faellt erst in Produktion auf.
+# Deshalb laeuft hier ein eigener Traefik mit denselben Flags wie
+# /opt/traefik/docker-compose.yml auf dem Server.
+#
+# Zwei bewusste Abweichungen von Produktion:
+#
+#   1. Traefik haengt auf 127.0.0.1:8080/8443 statt auf 80/443, damit nichts
+#      mit einem lokal laufenden Webserver kollidiert.
+#   2. Der ACME-CA-Server zeigt ins Nichts. Die Router tragen aus der
+#      Prod-Datei `tls=true` und `certresolver=letsencrypt`, und ein echter
+#      Resolver wuerde hier Zertifikate fuer app.fabu-online.de bei Let's
+#      Encrypt anfordern — gegen eine Domain, die noch woanders liegt, und auf
+#      Kosten des Rate-Limits. Mit einer unerreichbaren CA scheitert der
+#      Antrag still, Traefik liefert sein eingebautes Self-Signed-Zertifikat
+#      aus und routet normal weiter. Darum gehoert `-k` zu jedem curl hier.
+#
+# Testen (der Host-Header entscheidet, nicht die Adresse):
+#   curl -k --resolve app.fabu-online.de:8443:127.0.0.1 https://app.fabu-online.de/api/version
+#   curl -k --resolve app.fabu-online.de:8443:127.0.0.1 https://app.fabu-online.de/
+#   curl -k --resolve fabu-online.de:8443:127.0.0.1     https://fabu-online.de/impressum
+#
+# Aufraeumen (loescht auch die Testdaten):
+#   docker compose -f infra/docker-compose.prod.yml \
+#                  -f infra/docker-compose.local-test.yml -p fabu-local down -v
+
+services:
+  traefik:
+    image: traefik:v3.7
+    container_name: fabu-local-traefik
+    restart: "no"
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=web"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.caserver=https://127.0.0.1:1/directory"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/tmp/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--api.dashboard=false"
+      - "--log.level=INFO"
+    ports:
+      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - web
+
+  # Eigene Containernamen, damit ein Testlauf nicht mit einem echten
+  # Deployment auf demselben Rechner kollidiert.
+  postgres:
+    container_name: fabu-local-postgres
+  api:
+    container_name: fabu-local-api
+  worker:
+    container_name: fabu-local-worker
+  web:
+    container_name: fabu-local-web
+  landing:
+    container_name: fabu-local-landing

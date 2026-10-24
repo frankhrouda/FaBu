@@ -8,6 +8,9 @@ mobile/.expo/
 mobile/.expo-shared/
 mobile/dist/
 .env
+# Echte Produktions-Secrets liegen nur auf dem Server (chmod 600).
+# Vorlage ohne Werte: .env.production.example
+.env.production
 *.local
 playwright-report/
 test-results/

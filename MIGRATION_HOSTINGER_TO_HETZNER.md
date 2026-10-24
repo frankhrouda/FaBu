@@ -353,10 +353,13 @@ testbare Instanz. **Noch keine DNS-Änderung.**
   Bildauslieferung funktionieren.
 - **I-17 · Test ohne DNS.** Traefik routet nach `Host`-Header, also:
   ```
-  curl -k --resolve app.fabu-online.de:443:78.46.70.46  https://app.fabu-online.de/api/version
-  curl -k --resolve app.fabu-online.de:443:78.46.70.46  https://app.fabu-online.de/
-  curl -k --resolve fabu-online.de:443:78.46.70.46      https://fabu-online.de/impressum
+  curl -sk --noproxy '*' -H 'Host: app.fabu-online.de' https://78.46.70.46/api/version
+  curl -sk --noproxy '*' -H 'Host: app.fabu-online.de' https://78.46.70.46/
+  curl -sk --noproxy '*' -H 'Host: fabu-online.de'     https://78.46.70.46/impressum/
   ```
+  Host-Header statt `--resolve`: letzteres wird in meiner Arbeitsumgebung
+  ignoriert, und die Aufrufe landen dann unbemerkt auf der echten Produktion
+  (§17.5).
   Das `-k` ist erwartet und richtig: ein echtes Zertifikat kann es vor der
   DNS-Umstellung nicht geben (Let's Encrypt validiert per HTTP-01 gegen die öffentliche
   IP). Geprüft wird hier Routing, Rendering, API, DB-Inhalt und Bildauslieferung
@@ -641,3 +644,154 @@ Alles andere übernehme ich.
 **Ich:** I-1 bis I-34 — Containerisierung, Parallelaufbau, Datenmigration, Cutover,
 Zertifikate, Backup, Wächter, Doku, Stilllegung. Mit Token zusätzlich die komplette
 DNS-Arbeit.
+
+---
+
+## 17. Befunde aus dem lokalen Probelauf (Phase 1, 2026-10-24)
+
+Der Probelauf lief gegen den *echten* Produktions-Stack-Aufbau auf dem
+Dev-Rechner: drei Images gebaut, eigener Traefik mit denselben Flags wie
+`/opt/traefik/docker-compose.yml`, Datenbank aus einem `pg_dump` der
+Produktion (9 Nutzer / 5 Fahrzeuge / 30 Reservierungen / 2 Mandanten,
+Row-Counts gegengeprueft), Fahrzeugbilder aus dem echten Uploads-Verzeichnis.
+Harness dafuer: `infra/docker-compose.local-test.yml`.
+
+Grün durchgelaufen: alle drei Images bauen, die Prio-Aufteilung
+(api 10 / web 1) trennt `/api` und `/uploads` korrekt vom SPA-Fallback,
+Fahrzeugbilder sind unter beiden Pfaden erreichbar, `/calendar` und
+`/admin/tenants` liefern den React-Router-Fallback, die Landing-Unterseiten
+`/impressum` und `/datenschutz` funktionieren **und** ein unbekannter Pfad gibt
+ein ehrliches 404, `www` und der HTTP→HTTPS-Redirect stimmen, ein fremder
+Host-Header landet nicht bei FaBu, das Upload-Volume uebersteht ein
+`--force-recreate`, und `initDb()` ist ueber mehrere Container-Starts
+idempotent.
+
+Dabei sind vier Dinge aufgefallen. Drei habe ich direkt behoben, eines ist
+eine Entscheidung.
+
+### 17.1 Behoben: nginx schickte den Redirect als `http://`
+
+Astro baut mit `format: 'directory'`, legt also `impressum/index.html` ab. Ein
+Aufruf von `/impressum` erzeugt deshalb ein 301 auf `/impressum/`. Hinter
+Traefik baute nginx diesen Location-Header absolut aus `$scheme://$host` — und
+`$scheme` ist **im Container `http`**, weil Traefik das TLS schon terminiert
+hat. Herausgekommen ist `Location: http://fabu-online.de/impressum/`.
+
+Funktioniert hätte es (Traefik leitet http auf https), aber ueber einen
+unnoetigen Klartext-Umweg. Im alten Setup fiel das nicht auf, weil nginx dort
+selbst TLS terminierte und `$scheme` bereits `https` war — es wäre also eine
+Regression gewesen, die der Umzug eingeschleppt hätte.
+
+Behoben mit `absolute_redirect off` in beiden nginx-Configs: der Header ist
+jetzt relativ (`Location: /impressum/`) und damit unabhaengig von Schema, Host
+und Port. Nachgeprueft.
+
+### 17.2 Behoben: Der Worker pollte, bevor es ein Schema gab
+
+Das Datenbankschema legt `initDb()` beim Start der **API** an
+(`backend/src/db/client.js`); der Worker legt nichts an. Beide hingen nur an
+`postgres: service_healthy`, starteten also gleichzeitig — und der Worker
+loggte `relation "reservations" does not exist`. Er erholt sich nach einer
+Minute von selbst, aber ein Fehler im Log, der keiner ist, kostet bei der
+naechsten echten Stoerungssuche Zeit.
+
+Behoben: `worker` haengt jetzt zusaetzlich an `api: service_healthy`.
+
+### 17.3 Behoben: Der Worker wäre dauerhaft „unhealthy" gewesen
+
+Der Worker benutzt dasselbe Image wie die API und erbte damit deren
+HTTP-Healthcheck auf Port 3001 — auf dem er nicht lauscht. Er hätte für immer
+als `unhealthy` dagestanden. Ein Container, der immer unhealthy ist, ist
+schlimmer als keine Pruefung: er macht die Spalte in `docker ps` wertlos.
+
+Behoben: `healthcheck: disable: true` für den worker-Service. Was ihn
+stattdessen ueberwacht: stirbt der Prozess, endet der Container und
+`restart: unless-stopped` startet ihn neu; fachliche Fehler stehen in
+`docker logs fabu-worker`. Ein echter Lebenszeichen-Check (der Worker schreibt
+bei jedem Durchgang einen Zeitstempel, der Healthcheck prueft dessen Alter)
+wäre eine saubere Nachbesserung, braucht aber eine Code-Aenderung — als
+Folgeaufgabe notiert, nicht Teil des Umzugs.
+
+### 17.4 **Entscheidung nötig: Der Reminder-Worker ist schon heute kaputt**
+
+Der Probelauf hat einen Fehler reproduziert, der **nicht** vom Umzug kommt:
+
+```
+[reminder-worker] Fehler beim Abrufen von Reminders:
+function datetime(timestamp with time zone) does not exist
+```
+
+`backend/src/workers/reminder-worker.js` benutzt in zwei Stellen die
+**SQLite**-Funktion `datetime()`:
+
+- Zeile 74: `AND datetime(r.reminder_at_utc) <= datetime('now')`
+- Zeile 91: `SET reminder_status = 'sending', reminder_sent_at = datetime('now')`
+
+Postgres kennt `datetime()` nicht. Die Spalten sind
+`timestamp with time zone`.
+
+**Das ist kein Testartefakt.** Ich habe auf dem Produktionsserver
+nachgesehen — `pm2 logs fabu-reminder-worker` zeigt dieselbe Zeile, minuetlich,
+seit dem Prozessstart:
+
+```
+/home/deploy/.pm2/logs/fabu-reminder-worker-error.log
+[reminder-worker] Fehler beim Abrufen von Reminders: function datetime(...) does not exist
+   (15x dieselbe Zeile)
+```
+
+Die Folge: **seit der Umstellung auf PostgreSQL ist keine einzige
+Fahrt-Erinnerung verschickt worden.** Der Fehler wird im `catch` geloggt und
+der Worker macht weiter, deshalb ist es nie aufgefallen. Der Prozess steht in
+`pm2 status` seit sieben Tagen auf `online`.
+
+Der Fix selbst ist klein — in Postgres:
+
+```sql
+AND r.reminder_at_utc <= NOW()
+SET reminder_status = 'sending', reminder_sent_at = NOW()
+```
+
+Weil das Backend aber beide Datenbanken unterstuetzen soll, gehoert das hinter
+die Abstraktion in `db/client.js` (wie dort schon die `?`→`$1`-Umschreibung),
+nicht als nackte Postgres-Syntax in den Worker.
+
+**Warum ich das nicht einfach mitgefixt habe:** sobald die Abfrage
+funktioniert, verschickt der Worker Mails — und zwar beim ersten Durchgang
+alle Erinnerungen, die seit der Postgres-Umstellung mit
+`reminder_status = 'pending'` liegen geblieben sind. Das sind Mails an echte
+Nutzer über Fahrten, die teils längst vorbei sind. Das ist eine
+nach-aussen-wirkende Aenderung und deine Entscheidung, nicht meine.
+
+Drei Wege:
+
+| | Vorgehen | Bewertung |
+|---|---|---|
+| **A** | Fix **vor** dem Umzug, und vorher die abgelaufenen Reminder auf `sent` setzen (`UPDATE reservations SET reminder_status='sent' WHERE reminder_status='pending' AND reminder_at_utc < NOW()`) | Empfohlen. Keine Mail-Flut, Feature funktioniert ab dem Umzug, und der Umzug wird an einer bereits reparierten Anwendung geprueft |
+| **B** | Fix **nach** dem Umzug als eigener kleiner Change | Trennt die Baustellen sauber, aber der Abnahmetest des Umzugs kann die Erinnerungen dann nicht mitpruefen |
+| **C** | Erst mal nichts | Der Umzug aendert daran nichts — es bleibt kaputt wie heute. Dann aber bitte bewusst, nicht aus Versehen |
+
+Unabhaengig davon steht im Konzept weiter unten die Abnahme der
+**Passwort-Reset-Mail** (I-26): die laeuft über einen anderen Pfad
+(`backend/src/mail/mailer.js`, kein `datetime()`) und ist von diesem Fehler
+nicht betroffen.
+
+### 17.5 Nebenbefund für die Testpraxis
+
+`curl --resolve` wird in meiner Arbeitsumgebung **ignoriert** — meine ersten
+Testaufrufe sind an der Sandbox vorbei auf die *echte Produktion* gegangen
+(sichtbar daran, dass `/api/version` die dort deployte 1.09 lieferte, waehrend
+der lokale Container 1.10 meldete). Gemerkt habe ich es nur, weil die
+Versionsnummern auseinanderliefen.
+
+Konsequenz für alle Tests vor der DNS-Umstellung (I-17): **nicht** `--resolve`
+benutzen, sondern Host-Header plus Ziel-IP, und `--noproxy` setzen:
+
+```bash
+curl -sk --noproxy '*' -H 'Host: app.fabu-online.de' https://78.46.70.46/api/version
+curl -sk --noproxy '*' -H 'Host: fabu-online.de'     https://78.46.70.46/impressum/
+```
+
+Das `-k` ist dabei erwartet und richtig: vor der DNS-Umstellung kann es kein
+gueltiges Zertifikat geben, Traefik liefert sein Self-Signed aus und routet
+trotzdem korrekt nach Host-Header.
