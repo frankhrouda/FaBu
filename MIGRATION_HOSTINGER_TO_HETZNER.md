@@ -178,30 +178,48 @@ Empfehlung: Token. Er ist jederzeit widerrufbar.
 
 #### §3a — So erzeugst du den Token (D-3)
 
-⚠️ **Die alte DNS-Konsole `dns.hetzner.com` und ihre Legacy-API sind abgeschaltet**
-(Hetzner hat sie Mitte 2026 stillgelegt und alle Zonen automatisch in die Hetzner
-Console migriert). Anleitungen im Netz, die auf `dns.hetzner.com` → „API-Tokens"
-verweisen, sind veraltet. Der heutige Weg:
+⚠️ **Die alte DNS-Konsole `dns.hetzner.com` ist abgeschaltet** (Mai 2026,
+`dns.hetzner.com` leitet auf `console.hetzner.com` um). Tokens aus der alten
+Konsole funktionieren **nicht** weiter, und die alte API
+(`dns.hetzner.com/api/v1/...`) antwortet mit 401. Jede Anleitung, die auf
+„dns.hetzner.com → API-Tokens" verweist, ist veraltet. DNS ist jetzt Teil der
+Cloud-API, und der Zugriff haengt am **API-Token des Projekts**, in dem die
+Zonen liegen.
 
-1. `https://console.hetzner.com` öffnen und einloggen
-2. **Projekt auswählen** — das Projekt, in dem deine DNS-Zonen liegen
-   (dort stehen `sportfoto-hrouda.de`, `meinekladde.de`, `franksagent.de`)
-3. Links in der Menüleiste **„Sicherheit" / „Security"**
+**Klickpfad:**
+
+1. `https://console.hetzner.com` oeffnen und einloggen
+2. **Projekt auswaehlen, in dem die DNS-Zonen liegen.** Das ist der Schritt, an
+   dem es schiefgeht: beim automatischen Umzug legt Hetzner die Zonen haeufig
+   in ein eigenes Projekt, das dann etwa **„DNS Migrated"** heisst — nicht in
+   das Projekt, das man gewohnheitsmaessig anklickt. Im richtigen Projekt
+   stehen unter **DNS** die Zonen `sportfoto-hrouda.de`, `meinekladde.de`,
+   `franksagent.de`.
+3. Links im Menue **„Sicherheit"** (Security)
 4. Oben den Tab **„API-Tokens"**
-5. **„API-Token hinzufügen"**, Name z. B. `fabu-migration-2026-10`
-6. Berechtigung **„Read & Write"** — mit „Read" kann ich nur lesen, keine Records anlegen
-7. Token kopieren und mir hier schicken
+5. **„API-Token hinzufuegen"**, Name z. B. `fabu-migration-2026-10`
+6. Berechtigung **„Read & Write"** — mit „Read" kann ich nur lesen, keine
+   Records anlegen
+7. Token kopieren und mir geben
 
-**Zwei Dinge dabei:**
-- Der Token wird **nur einmal angezeigt**. Nach dem Schließen des Fensters ist er nicht
-  mehr abrufbar — dann musst du einen neuen erzeugen.
-- Tokens sind **projektgebunden**. Liegen die Zonen in einem anderen Projekt als dem
-  ausgewählten, greift der Token nicht. Falls du mehrere Projekte hast: sag mir, welches,
-  oder schick mir den Token aus dem Projekt, in dem du die Zonen siehst.
+**Drei Dinge dazu:**
 
-Der Token hat in dem Projekt vollen Zugriff (nicht nur DNS) — löschst du ihn nach dem
-Umzug unter demselben Menüpunkt wieder, ist das erledigt. Sag mir Bescheid, wenn der
-Umzug durch ist, dann erinnere ich dich daran.
+- Der Token wird **nur einmal angezeigt**. Nach dem Schliessen des Fensters ist
+  er nicht mehr abrufbar, dann braucht es einen neuen.
+- Tokens sind **projektgebunden** und gelten nur fuer *ein* Projekt. Ein Token
+  aus dem falschen Projekt sieht die Zonen nicht — der Fehler ist dann
+  „zone not found", nicht „unauthorized", was in die Irre fuehrt. Ich pruefe
+  deshalb als erstes, ob ich die drei bekannten Zonen auflisten kann, und
+  melde sofort zurueck, wenn der Token aus dem falschen Projekt kommt.
+- **Reichweite:** Ein Cloud-API-Token kann in *seinem* Projekt alles, nicht nur
+  DNS — in einem Projekt mit Servern also auch Server anlegen oder loeschen.
+  Feiner einstellen laesst sich das nicht. Zwei Dinge entschaerfen das hier:
+  liegen die Zonen in einem reinen DNS-Projekt (wie dem automatisch
+  angelegten), gibt es dort nichts anderes anzufassen. Und `franksagent` ist
+  ein **dedizierter Root-Server**, der in Robot verwaltet wird und gar nicht
+  in einem Cloud-Projekt liegt — ein Cloud-Token kann ihn nicht beruehren.
+  Trotzdem: nach dem Umzug unter demselben Menuepunkt wieder loeschen. Ich
+  erinnere daran, wenn wir durch sind.
 
 ### E-3: Darf ich auf dem VPS `sudo` nutzen?
 
