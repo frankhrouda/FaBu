@@ -28,6 +28,13 @@ cd "$(dirname "$0")/../.."
 
 SSH_HOST="${SSH_HOST:-hetzner-sportfoto}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/fabu}"
+# Achtung im Parallelbetrieb vor dem DNS-Cutover: diese URL zeigt auf den
+# *oeffentlichen* Namen, und der steht bis zum Cutover noch auf dem alten
+# Hostinger-VPS. Der Check meldet dann gruen, ohne den neuen Stack beruehrt zu
+# haben. Bis dahin ueberschreiben, z. B.:
+#   HEALTHCHECK_URL=https://78.46.70.46/api/version ./infra/scripts/deploy.sh
+# (oder den Check ueberspringen und per Host-Header pruefen, siehe
+# MIGRATION_HOSTINGER_TO_HETZNER.md §17.5). Nach dem Cutover stimmt es selbst.
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-https://app.fabu-online.de/api/version}"
 COMPOSE="docker compose -f infra/docker-compose.prod.yml --env-file .env.production"
 

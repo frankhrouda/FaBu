@@ -348,7 +348,7 @@ Alles in diesem Abschnitt passiert im Git-Repo. Produktion läuft unberührt wei
 
 ---
 
-## 7. Phase 2 — Parallelbetrieb auf `franksagent` aufbauen (ich)
+## 7. Phase 2 — Parallelbetrieb auf `franksagent` aufbauen (ich) — ✅ ERLEDIGT 2026-10-24
 
 Produktion läuft weiter auf Hostinger. Auf Hetzner entsteht daneben eine vollständige,
 testbare Instanz. **Noch keine DNS-Änderung.**
@@ -383,6 +383,81 @@ testbare Instanz. **Noch keine DNS-Änderung.**
   IP). Geprüft wird hier Routing, Rendering, API, DB-Inhalt und Bildauslieferung
   (`/api/uploads/vehicles/<datei>.jpg`).
 - **I-18 · Report an dich** mit den Testergebnissen, bevor irgendetwas an DNS passiert.
+
+### Ergebnis (2026-10-24)
+
+`/opt/fabu` steht, Verzeichnis gehoert `frank`, 138 Dateien aus `HEAD`,
+Executable-Bits der Skripte intakt (`-rwxrwxr-x`). `.env.production`
+chmod 600, Eigentuemer `frank`: `JWT_SECRET` (128 Zeichen) und
+`RESEND_API_KEY` unveraendert vom VPS uebernommen, `POSTGRES_PASSWORD` neu.
+Alle fuenf Container gebaut und hochgefahren, die Startreihenfolge greift
+(postgres healthy → api → api healthy → worker).
+
+**Datenabgleich alt gegen neu, alle neun Tabellen:**
+
+```
+users|vehicles|reservations|tenants|members|codes|waitlist|tokens|reqs
+Hostinger:  9|5|30|2|10|0|0|4|1
+Hetzner:    9|5|30|2|10|0|0|4|1   -> identisch
+Bilder:     4 Dateien / 4,9 MB  ->  4 Dateien / 4,9 MB
+```
+
+**Test gegen den echten Traefik** (Host-Header auf 78.46.70.46, §17.5): API,
+SPA samt Router-Fallback (`/calendar`, `/admin/tenants`), alle vier
+Fahrzeugbilder mit korrektem Content-Type, Landing mit `/impressum/` und
+`/datenschutz/`, 404 fuer Unbekanntes, `www`. Der Login-Pfad geht bis in die
+Datenbank (erfundene Adresse → 401, nicht 500), ein geschuetzter Endpunkt
+ohne Token → 401.
+
+**Der Beweis, dass der Test die richtige Maschine getroffen hat:**
+`/api/version` liefert auf Hetzner `1.13`, auf dem VPS unveraendert `1.09`.
+Ohne so einen Marker haette ein fehlgeleiteter Test gruen aussehen koennen —
+genau der Fehler aus §17.5.
+
+### ⚠️ Der Stack ist seitdem bewusst **angehalten**
+
+Sobald die Container liefen, hat Traefik angefangen, Zertifikate zu holen —
+und Let's Encrypt validiert gegen die oeffentliche IP, also gegen den **VPS**:
+
+```
+unable to generate a certificate for the domains [app.fabu-online.de]:
+  187.124.170.226: Error reading HTTP response body: reader size limit exceeded
+unable to generate a certificate for [fabu-online.de www.fabu-online.de]:
+  187.124.170.226: Invalid response from .../.well-known/acme-challenge/...: 404
+```
+
+Das muss scheitern, solange DNS auf den VPS zeigt — erwartbar. Es ist aber
+nicht harmlos: in 15 Minuten vier Fehlversuche, und Let's Encrypt begrenzt
+**fehlgeschlagene Validierungen auf 5 pro Hostname und Stunde**. Ueber Tage
+bis zum Cutover waere der Zaehler mit hoher Wahrscheinlichkeit gerade dann
+ausgeschoepft, wenn das Zertifikat wirklich gebraucht wird. Dazu laufen die
+Fehler in das **gemeinsame** Traefik-Log, in dem auch die anderen zwoelf Apps
+dieses Servers gesucht werden.
+
+Deshalb: `docker compose stop` nach dem Test. Die Volumes
+(`fabu_postgres_data`, `fabu_uploads_data`) bleiben mit allen Daten erhalten,
+die Routen sind bei Traefik abgemeldet (Host-Header liefert jetzt 404), und
+die Images sind gebaut. Der Cutover ist damit ein Start, kein Bau — und der
+erste ACME-Antrag faellt genau in den Moment, in dem DNS schon richtig zeigt.
+
+**Folge fuer die Cutover-Reihenfolge:** DNS flippen **zuerst**, dann den Stack
+starten (siehe Phase 4, I-23/I-23b). Nicht umgekehrt.
+
+### Zwei Nebenbefunde vom Server
+
+- **`deploy.sh` taeuscht im Parallelbetrieb.** Sein Health-Check fragt
+  `https://app.fabu-online.de/api/version` ab — also die oeffentliche URL, die
+  bis zum Cutover auf den **alten** Server zeigt. Er haette gruen gemeldet,
+  ohne den neuen Stack je beruehrt zu haben. Bis zum Cutover deshalb
+  `HEALTHCHECK_URL` ueberschreiben oder die Schritte einzeln fahren; danach
+  stimmt es von selbst. (Im Skript als Kommentar vermerkt.)
+- **Vorbestehender Fremdlaerm im Traefik-Log**, nicht von FaBu:
+  `Cannot retrieve the ACME challenge for ai.franksagent.de /
+  hermes.franksagent.de / me.franksagent.de`. Deren DNS zeigt auf Hetzner,
+  waehrend die nginx-Sites samt Certbot noch auf dem VPS liegen — dessen
+  Erneuerungsversuche landen hier und finden kein Token. Die drei Seiten sind
+  tot, es ist reines Rauschen, aber es verschwindet erst, wenn der VPS weg ist
+  (oder dessen Certbot-Eintraege entfernt werden).
 
 ### Du (D)
 
@@ -513,7 +588,8 @@ Datenbank **nie** gleichzeitig an zwei Stellen beschrieben wird.
 | I-20 | **Alt-Instanz schreibdicht machen**: `pm2 stop fabu-backend fabu-reminder-worker` auf dem VPS. Ab hier zeigt die App eine Fehlerseite — das ist der Beginn der Downtime. | ich |
 | I-21 | **Final-Dump**: `pg_dump` + Uploads-`rsync` vom VPS, Delta einspielen (DB wird frisch restauriert, nicht gemerged — 8,5 MB, dauert Sekunden) | ich |
 | I-22 | **Datenabgleich prüfen**: Row-Counts `users`/`vehicles`/`reservations`/`tenants`/`waitlist`/`invitation_codes` alt vs. neu müssen exakt übereinstimmen | ich |
-| I-23 | **A-Records flippen**: `@` und `app` auf `78.46.70.46`, AAAA auf `2a01:4f8:120:3143::2`. `omafun` bleibt. TTL 300 → in ≤ 5 min überall sichtbar | ich (oder du, ohne Token) |
+| I-23 | **A-Records flippen**: `@` und `app` auf `78.46.70.46`. `omafun` bleibt auf dem VPS. TTL steht auf 300 → in ≤ 5 min überall sichtbar. Kein AAAA nötig und keines vorhanden (Schritt 3a) | ich |
+| I-23b | **Stack starten**: `docker compose … up -d`. Erst jetzt, nicht vorher — so faellt Traefiks erster ACME-Antrag in den Moment, in dem DNS schon auf Hetzner zeigt. Images sind gebaut, es ist ein Start von Sekunden | ich |
 | I-24 | **Zertifikate**: Traefik holt sie beim ersten Request automatisch. Falls ein Antrag scheitert: `docker compose … up -d --force-recreate web` — ein `docker restart` genügt **nicht**, Traefik fordert erst bei geänderter Service-Identität zeitnah neu an (Erfahrung `meinekladde`, Zertifikat kam ~3 min später) | ich |
 | I-25 | `resolvectl flush-caches` auf **beiden** Servern — `systemd-resolved` hält sonst die alten Adressen, und Cron-Jobs, die gegen die öffentliche URL laufen, treffen die falsche Maschine (Erfahrung `meinekladde`) | ich |
 | I-26 | **Funktionstest**: Login, Fahrzeugliste, Bilder, Kalender, Reservierung anlegen, Bild-Upload > 1 MB, Passwort-Reset-Mail (prüft Resend-Records in der neuen Zone), Landing inkl. `/impressum` und `/datenschutz`, HTTPS-Redirect, `www`→Apex | ich |
