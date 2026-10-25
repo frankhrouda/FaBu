@@ -1119,8 +1119,7 @@ angenommen.
 
 **1. Der erste Versuch, die A-Records zu ändern, scheiterte** mit
 `422 can't update records with this endpoint`. Ein `PUT` auf
-`/zones/{id}/rrsets/{name}/{type}` ändert TTL und Labels, aber nicht die
-Records. Richtig ist:
+`/zones/{id}/rrsets/{name}/{type}` ändert die Records nicht. Richtig ist:
 
 ```
 POST /v1/zones/{id}/rrsets/{name}/{type}/actions/set_records
@@ -1130,6 +1129,17 @@ POST /v1/zones/{id}/rrsets/{name}/{type}/actions/set_records
 Die Aktion läuft **asynchron** (`status: running`) — eine Kontrolle vier
 Sekunden später zeigte noch den alten Wert und sah nach einem zweiten
 Fehlschlag aus. Beim nächsten Mal: Aktion abwarten statt sofort prüfen.
+
+> **Nachtrag vom Umzug `lustiges-tabellenspiel` (2026-10-25):** `PUT` ändert
+> auch die **TTL nicht** — anders als hier zuerst notiert. Es antwortet
+> `HTTP 200` und gibt das Objekt mit unverändertem `"ttl": null` zurück, ohne
+> Fehler und ohne Hinweis. Dafür gibt es ebenfalls eine asynchrone Aktion:
+> `POST /v1/zones/{id}/rrsets/{name}/{type}/actions/change_ttl {"ttl":300}`
+> (`command: change_rrset_ttl`, dort ~13 s). `PATCH` gibt 405.
+> Faustregel: **jede** Schreiboperation dieser API ist eine Aktion, und
+> gegengeprüft wird per `dig` gegen alle autoritativen NS, nicht gegen die API.
+> Die Basis-URL ist `https://api.hetzner.cloud/v1`; `api.hetzner.com` gibt
+> `not_found` und sieht dabei nach einem Pfadfehler aus.
 
 **2. Zweimal zeigte ein Test den falschen Zustand an**, beide Male durch DNS,
 nicht durch die Anwendung:
