@@ -2,8 +2,10 @@
 
 > **✅ Umgezogen am 2026-10-24, 16:02–16:09 Uhr. Downtime rund 7 Minuten.**
 > FaBu läuft unter `/opt/fabu` auf `franksagent`. Offen sind nur noch der
-> GPG-Key fürs Secret-Backup (D-10), der Registrar-Transfer (D-15) und die
-> VPS-Kündigung samt `lustiges-tabellenspiel.de` (§12). Protokoll: §20.
+> GPG-Key fürs Secret-Backup (D-10), der Registrar-Transfer (D-15), zwei
+> Schlüssel, die weg müssen (omafuns `ANTHROPIC_API_KEY`, der DNS-API-Token),
+> und die VPS-Kündigung samt `lustiges-tabellenspiel.de` (§12).
+> Protokoll: §20, Checkliste: §16.
 
 Stand: 2026-10-24. Grundlage: Inspektion beider Server, der DNS-Zone und des Repos
 (keine Annahmen — alle Zahlen unten sind gemessen).
@@ -832,24 +834,53 @@ Alles andere übernehme ich.
 
 ## 16. Kurz-Checkliste
 
-**Du, jetzt:**
+Stand dieser Liste: **2026-10-25**. Der Cutover ist durch (§20); offen ist nur
+noch das Drumherum.
+
+**Erledigt:**
+- [x] D-1 · Zonen-Export geliefert und abgeglichen (2026-10-24, §19) — 7 von 7
+      Records identisch, D-6 damit freigegeben
 - [x] D-2 Entscheidungen E-1 / E-2 / E-3 getroffen (2026-10-24, siehe §3)
 - [x] D-3 · API-Token geliefert (2026-10-24), Zone 1662373 angelegt und verifiziert
-- [x] D-1 · Zonen-Export geliefert und abgeglichen (2026-10-24, §19) — 7 von 7
-      Records identisch, D-6 ist damit freigegeben
-- [ ] **Entscheidung §17.4 · Reminder-Worker** — der letzte offene Punkt vor dem
-      Cutover
+- [x] D-5 Freigabe DNS-Schnitt (2026-10-24)
+- [x] D-6 Nameserver im hPanel auf hydrogen/oxygen/helium (2026-10-24, ~15:55) —
+      DENIC übernahm es in Minuten
+- [x] **Entscheidung §17.4 · Reminder-Worker: verschoben.** Der Umzug lief mit dem
+      bekannten Fehler, der Worker bleibt kaputt. Wer ihn fixt, setzt **vorher**
+      die abgelaufenen Reminder auf `sent` — sonst mailt der erste Lauf den
+      gesamten Rückstand an echte Nutzer
+- [x] ~~D-13 `omafun`~~ (entfallen — wird nicht umgezogen, geht mit dem VPS)
+- [x] D-11 / D-12 entfallen (VPS wird gelöscht, nicht abgeschaltet)
 
-**Du, später (je ein Stichwort von mir vorher):**
-- [ ] D-5 Freigabe DNS-Schnitt · D-6 Nameserver im hPanel (hydrogen/oxygen/helium, siehe D-6) · D-8 Gegentest
-- [ ] D-9 48 h beobachten · D-10 GPG-Keypair
-- [ ] ~~D-13 `omafun`~~ (entfallen) · D-14 `lustiges-tabellenspiel.de` · D-15 Registrar-Transfer
-      · D-17 VPS kündigen (**erst nach I-33**) · D-18 Hostinger-Konto schließen
-- [ ] D-11 / D-12 entfallen (VPS wird gelöscht)
+**Offen, du:**
+- [ ] **`ANTHROPIC_API_KEY` im Anthropic-Konto widerrufen** — liegt in omafuns
+      `.env` (§4) und bleibt nach der VPS-Löschung gültig. Unabhängig von allem
+      anderen sofort machbar
+- [ ] **DNS-API-Token in der Hetzner Console wieder löschen** — die Zonenarbeit
+      ist durch
+- [ ] D-8 Gegentest mit echtem Account: Login, Buchung, Passwort-Reset-Mail.
+      Der Abnahmetest in §20 war meiner (Login mit erfundener Adresse → 401),
+      kein echter Account
+- [ ] D-9 48 h Normalbetrieb beobachten — Fenster läuft seit 2026-10-24 16:09,
+      endet 2026-10-26 ~16:10
+- [ ] D-10 GPG-Keypair fürs Secret-Backup (`infra/RESTORE.md`) — erledigt
+      `klarliste` und `meinekladde` gleich mit
+- [ ] D-14 `lustiges-tabellenspiel.de` umziehen — **in Arbeit:** TTL steht auf
+      300 (§20-Nachtrag), die A-Records von `@` und `www` zeigen am 2026-10-25
+      aber noch auf `187.124.170.226`. Letzter Blocker der VPS-Kündigung
+- [ ] D-15 Registrar-Transfer `fabu-online.de` zu Hetzner
+- [ ] D-17 VPS kündigen (**erst nach I-33**) · D-18 Hostinger-Konto schließen
 
-**Ich:** I-1 bis I-34 — Containerisierung, Parallelaufbau, Datenmigration, Cutover,
-Zertifikate, Backup, Wächter, Doku, Stilllegung. Mit Token zusätzlich die komplette
-DNS-Arbeit.
+**Offen, ich:**
+- [ ] I-33 Abschluss-Archiv vor der Kündigung — inkl. omafuns `prisma/app.db`,
+      `data/photos`, `data/whatsapp-auth` (<6 MB) und der nginx-Configs, die
+      `lustiges-tabellenspiel` als Vorlage braucht (§4). Eine Kündigung löscht
+      den VPS, sie archiviert ihn nicht
+
+**Ich, erledigt:** I-1 bis I-32 — Containerisierung, Parallelaufbau,
+Datenmigration, Cutover, Zertifikate, Backup (Restore erprobt), Wächter, Doku,
+samt der kompletten DNS-Arbeit. Offen bleibt I-33 (Abschluss-Archiv) und danach
+I-34 (Stilllegung).
 
 ---
 
@@ -1166,12 +1197,16 @@ curl -s -o /dev/null -w '%{http_code} via %{remote_ip}\n' https://app.fabu-onlin
 
 ### Was jetzt noch offen ist
 
+Stand 2026-10-25. Vollständige Liste mit dem Erledigten: §16.
+
 | | Wer | Was |
 |---|---|---|
+| — | **du** | `ANTHROPIC_API_KEY` aus omafuns `.env` im Anthropic-Konto widerrufen (§4) |
+| — | **du** | DNS-API-Token in der Hetzner Console wieder löschen |
 | D-8 | **du** | Gegentest mit echtem Account: Login, Buchung, Passwort-Reset-Mail |
-| D-9 | **du** | 48 h Normalbetrieb beobachten, dann gilt der Umzug als bestätigt |
+| D-9 | **du** | 48 h Normalbetrieb beobachten (bis 2026-10-26 ~16:10), dann gilt der Umzug als bestätigt |
 | D-10 | **du** | GPG-Keypair fürs Secret-Backup (`infra/RESTORE.md`) — erledigt klarliste und meinekladde gleich mit |
-| D-14 | du | `lustiges-tabellenspiel.de` umziehen — letzter Blocker der VPS-Kündigung |
+| D-14 | du | `lustiges-tabellenspiel.de` umziehen — TTL auf 300 vorbereitet, Record-Flip offen. Letzter Blocker der VPS-Kündigung |
 | D-15 | du | Registrar-Transfer `fabu-online.de` zu Hetzner |
+| D-17 / D-18 | du | VPS kündigen (**erst nach I-33**), dann Hostinger-Konto schließen |
 | I-33 | ich | Abschluss-Archiv vor der Kündigung (inkl. omafun-Daten, §4) |
-| — | du | DNS-API-Token in der Hetzner Console wieder löschen |
