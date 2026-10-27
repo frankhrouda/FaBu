@@ -15,3 +15,6 @@ mobile/dist/
 playwright-report/
 test-results/
 backend/coverage/
+# Exportierte private GPG-Schluessel (siehe infra/RESTORE.md) gehoeren in den
+# Passwortmanager, nie ins Repo — auch nicht versehentlich.
+*-private.asc
